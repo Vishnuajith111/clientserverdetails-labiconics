@@ -1212,9 +1212,12 @@ function filteredClients(){
   if(!q) return sorted;
   return sorted.filter(c => c.name.toLowerCase().includes(q));
 }
+function visibleInstanceTypes(client){
+  return INSTANCE_TYPES.filter(t => !(client.instances[t.key] && client.instances[t.key].isHidden));
+}
 function filledCount(client){
   let n=0;
-  INSTANCE_TYPES.forEach(t=>{
+  visibleInstanceTypes(client).forEach(t=>{
     const inst=client.instances[t.key];
     if(!inst) return;
     const hasSingle = inst.serverName || inst.serverIp;
@@ -1241,7 +1244,7 @@ function renderSidebar(){
       ${avatarHtml(c, 28)}
       <div style="min-width:0;">
         <div class="cname" style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(c.name||'Untitled client')}</div>
-        <div class="ccount">${filledCount(c)}/3 instances set</div>
+        <div class="ccount">${filledCount(c)}/${visibleInstanceTypes(c).length} instances set</div>
       </div>
     </div>`).join('');
   list.querySelectorAll('.client-item').forEach(el=>{
@@ -1267,7 +1270,7 @@ function renderMain(){
     <div class="client-header">
       <div style="display:flex; align-items:center; gap:14px;">
         ${avatarHtml(client, 48)}
-        <div><h1>${escapeHtml(client.name||'Untitled client')}</h1><div class="sub">${filledCount(client)} of 3 instances configured${typesLine ? ' · ' + escapeHtml(typesLine) : ''}</div></div>
+        <div><h1>${escapeHtml(client.name||'Untitled client')}</h1><div class="sub">${filledCount(client)} of ${visibleInstances.length} instances configured${typesLine ? ' · ' + escapeHtml(typesLine) : ''}</div></div>
       </div>
       <div class="header-actions"><button class="btn btn-ghost" id="viewHistoryBtn">History</button><button class="btn btn-ghost" id="editClientBtn">Edit</button></div>
     </div>
