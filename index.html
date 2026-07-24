@@ -763,9 +763,9 @@ document.getElementById('loginBtn').addEventListener('click', async ()=>{
     if(profileErr){ errEl.textContent = 'Account created, but profile setup failed: ' + profileErr.message; return; }
     await routeAfterAuth(data.user);
   } else if(authMode === 'forgot'){
-    const { data, error } = await sb.from('profiles').update({ reset_requested: true }).eq('username', username).select();
+    const { data, error } = await sb.rpc('request_password_reset', { target_username: username });
     btn.disabled = false; btn.textContent = oldText;
-    if(error || !data.length){ errEl.textContent = 'User not found or request failed.'; return; }
+    if(error || !data){ errEl.textContent = 'User not found or request failed.'; return; }
     noteEl.textContent = 'Reset request sent to admin.';
     setTimeout(()=> handleToggleMode('login'), 2000);
   } else if(authMode === 'reset'){
