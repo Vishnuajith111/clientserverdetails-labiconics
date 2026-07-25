@@ -101,7 +101,7 @@ textarea{font-family:'Inter',sans-serif; resize:vertical; min-height:60px;}
 .instance-card{background:var(--panel); border:1px solid var(--border); border-radius:10px; overflow:hidden;}
 .instance-head{padding:14px 18px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between;}
 .instance-tag{font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:1.5px; font-weight:700; text-transform:uppercase;}
-.tag-training{color:var(--info);} .tag-validation{color:var(--accent);} .tag-production{color:var(--success);}
+.tag-training{color:var(--info);} .tag-validation{color:var(--accent);} .tag-production{color:var(--success);} .tag-custom{color:#B58DF1;}
 .instance-body{padding:16px 18px; display:flex; flex-direction:column; gap:14px;}
 .kv .k{font-size:10.5px; text-transform:uppercase; letter-spacing:1px; color:var(--text-dim); margin-bottom:4px; display:flex; align-items:center; justify-content:space-between;}
 .kv .v{font-family:'JetBrains Mono',monospace; font-size:13px; word-break:break-word; white-space:pre-wrap; line-height:1.5;}
@@ -274,11 +274,7 @@ textarea{font-family:'Inter',sans-serif; resize:vertical; min-height:60px;}
       <div id="appTypeDropdownPanel" class="hidden" style="position:absolute; top:100%; left:0; right:0; margin-top:4px; background:var(--panel-alt); border:1px solid var(--border); border-radius:8px; padding:10px; z-index:10; max-height:220px; overflow-y:auto; box-shadow:0 12px 30px rgba(0,0,0,0.4);"></div>
     </div>
 
-    <div class="instance-tabs">
-      <button class="instance-tab-btn active" data-tab="training">Training</button>
-      <button class="instance-tab-btn" data-tab="validation">Validation</button>
-      <button class="instance-tab-btn" data-tab="production">Production</button>
-    </div>
+    <div class="instance-tabs" id="instanceTabsBar"></div>
     <div id="instancePanes"></div>
     <div class="modal-footer">
       <div><button class="btn btn-danger hidden" id="deleteClientBtn">Delete client</button></div>
@@ -413,6 +409,17 @@ const INSTANCE_TYPES = [
   {key:'validation', label:'Validation', tagClass:'tag-validation'},
   {key:'production', label:'Production', tagClass:'tag-production'}
 ];
+function getInstanceTypes(client){
+  const custom = (client && client.instances && client.instances.__customTypes) || [];
+  return INSTANCE_TYPES.concat(custom.map(c=>({key:c.key, label:c.label, tagClass:'tag-custom'})));
+}
+function slugifyInstanceKey(label, client){
+  let base = (label||'').trim().toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'') || 'instance';
+  const existingKeys = getInstanceTypes(client).map(t=>t.key);
+  let key = base, n = 2;
+  while(existingKeys.includes(key)){ key = base + '_' + n; n++; }
+  return key;
+}
 const SERVER_CORE_FIELDS = [
   {key:'serverName', label:'Server username', type:'text'},
   {key:'serverIp', label:'Server IP', type:'text'},
@@ -478,7 +485,7 @@ function diffClient(oldClient, newClient){
       oldVal: oldClient ? (oldClient.name||'') : '', newVal: newClient.name||''});
   }
   const fieldDescs = allInstanceFieldDescriptors();
-  INSTANCE_TYPES.forEach(t=>{
+  getInstanceTypes(newClient).forEach(t=>{
     const oldInst = oldClient && oldClient.instances[t.key];
     const newInst = newClient.instances[t.key];
     const oldMode = (oldInst && oldInst.mode) || 'single';
@@ -537,7 +544,7 @@ function renderActivityEntry(e){
         newDisp = c.newVal ? (revealed ? c.newVal : maskValue(c.newVal)) : '(empty)';
         revealBtn = `<button class="icon-btn" data-action="reveal-log" data-key="${stateKey}">${revealed?'HIDE':'SHOW'}</button>`;
       }
-      const scope = c.instance ? (INSTANCE_TYPES.find(t=>t.key===c.instance)||{}).label : '';
+      const scope = c.instanceLabel || '';
       return `<div style="font-size:12.5px; margin-top:6px; display:flex; justify-content:space-between; gap:10px; align-items:baseline;">
         <span style="color:var(--text-muted); flex-shrink:0;">${scope?scope+' · ':''}${c.label}</span>
         <span class="mono" style="text-align:right;">${escapeHtml(oldDisp)} → ${escapeHtml(newDisp)} ${revealBtn}</span>
@@ -1008,7 +1015,7 @@ let completionSearchQuery = '';
 
 function computeCompletionPercent(client){
   let total = 0, filled = 0;
-  INSTANCE_TYPES.forEach(t=>{
+  getInstanceTypes(client).forEach(t=>{
     const inst = client.instances[t.key] || emptyInstance();
     const mode = inst.mode || 'single';
     const coreKeys = mode === 'multiple'
@@ -1213,7 +1220,7 @@ function filteredClients(){
   return sorted.filter(c => c.name.toLowerCase().includes(q));
 }
 function visibleInstanceTypes(client){
-  return INSTANCE_TYPES.filter(t => !(client.instances[t.key] && client.instances[t.key].isHidden));
+  return getInstanceTypes(client).filter(t => !(client.instances[t.key] && client.instances[t.key].isHidden));
 }
 function filledCount(client){
   let n=0;
@@ -1262,7 +1269,7 @@ function renderMain(){
   empty.classList.add('hidden'); detail.classList.remove('hidden');
   document.getElementById('dashboardView').classList.add('hidden');
   const typesLine = (client.applicationTypes && client.applicationTypes.length) ? client.applicationTypes.join(' · ') : '';
-  const visibleInstances = INSTANCE_TYPES.filter(t => {
+  const visibleInstances = getInstanceTypes(client).filter(t => {
     const inst = client.instances[t.key] || {};
     return !inst.isHidden;
   });
@@ -1349,9 +1356,10 @@ function fieldInputHtml(t, f, val){
   }
   return `<div class="form-row"><label class="field-label">${f.label}</label><input type="text" id="${id}" data-instance="${t.key}" data-field="${f.key}" value="${escVal}"></div>`;
 }
-function buildInstancePanesHTML(instances){
-  return INSTANCE_TYPES.map(t=>{
-    const inst = instances[t.key];
+function buildInstancePanesHTML(client){
+  const instances = client.instances;
+  return getInstanceTypes(client).map(t=>{
+    const inst = instances[t.key] || emptyInstance();
     const mode = inst.mode || 'single';
     const isHidden = !!inst.isHidden;
     const modeToggleHtml = `
@@ -1398,7 +1406,7 @@ function attachModeToggleListeners(){
       const key = btn.getAttribute('data-instance');
       const newMode = btn.getAttribute('data-mode-btn');
       window.__modalClient.instances[key].mode = newMode;
-      document.getElementById('instancePanes').innerHTML = buildInstancePanesHTML(window.__modalClient.instances);
+      document.getElementById('instancePanes').innerHTML = buildInstancePanesHTML(window.__modalClient);
       document.querySelectorAll('.instance-pane').forEach(p=>p.classList.toggle('active', p.getAttribute('data-pane')===activeTab));
       attachModeToggleListeners();
     });
@@ -1408,11 +1416,61 @@ function attachModeToggleListeners(){
       commitAllInstancePaneValues();
       const key = btn.getAttribute('data-toggle-visibility');
       window.__modalClient.instances[key].isHidden = !window.__modalClient.instances[key].isHidden;
-      document.getElementById('instancePanes').innerHTML = buildInstancePanesHTML(window.__modalClient.instances);
+      document.getElementById('instancePanes').innerHTML = buildInstancePanesHTML(window.__modalClient);
       document.querySelectorAll('.instance-pane').forEach(p=>p.classList.toggle('active', p.getAttribute('data-pane')===activeTab));
       attachModeToggleListeners();
     });
   });
+}
+function renderInstanceTabs(client){
+  const types = getInstanceTypes(client);
+  const tabsHtml = types.map(t=>`<button type="button" class="instance-tab-btn ${t.key===activeTab?'active':''}" data-tab="${t.key}">${escapeHtml(t.label)}</button>`).join('');
+  return `${tabsHtml}<button type="button" class="instance-tab-btn" id="addInstanceTabBtn" style="border:1px dashed var(--border); border-radius:4px; padding:6px 10px; margin-left:4px;" title="Add another instance">+ Add instance</button>`;
+}
+function rebuildInstanceTabsAndPanes(){
+  const client = window.__modalClient;
+  document.getElementById('instanceTabsBar').innerHTML = renderInstanceTabs(client);
+  document.getElementById('instancePanes').innerHTML = buildInstancePanesHTML(client);
+  attachInstanceTabListeners();
+  attachModeToggleListeners();
+}
+function attachInstanceTabListeners(){
+  const bar = document.getElementById('instanceTabsBar');
+  bar.querySelectorAll('.instance-tab-btn[data-tab]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      commitAllInstancePaneValues();
+      activeTab = btn.getAttribute('data-tab');
+      bar.querySelectorAll('.instance-tab-btn[data-tab]').forEach(b=>b.classList.toggle('active', b===btn));
+      document.querySelectorAll('.instance-pane').forEach(p=>p.classList.toggle('active', p.getAttribute('data-pane')===activeTab));
+    });
+  });
+  const addBtn = document.getElementById('addInstanceTabBtn');
+  if(addBtn){
+    addBtn.addEventListener('click', ()=>{
+      commitAllInstancePaneValues();
+      addBtn.outerHTML = `<span style="display:inline-flex; align-items:center; gap:6px; margin-left:4px;">
+        <input type="text" id="newInstanceNameInput" placeholder="Instance name" style="font-size:12px; padding:6px 8px; width:140px; font-family:'Inter',sans-serif;">
+        <button type="button" class="btn btn-primary" id="confirmAddInstanceBtn" style="font-size:11px; padding:6px 10px;">Add</button>
+        <button type="button" class="btn btn-ghost" id="cancelAddInstanceBtn" style="font-size:11px; padding:6px 10px;">Cancel</button>
+      </span>`;
+      const input = document.getElementById('newInstanceNameInput');
+      input.focus();
+      const commit = ()=>{
+        const label = input.value.trim();
+        if(!label){ showToast('Enter an instance name'); return; }
+        const client = window.__modalClient;
+        if(!client.instances.__customTypes) client.instances.__customTypes = [];
+        const key = slugifyInstanceKey(label, client);
+        client.instances.__customTypes.push({key, label});
+        client.instances[key] = emptyInstance();
+        activeTab = key;
+        rebuildInstanceTabsAndPanes();
+      };
+      document.getElementById('confirmAddInstanceBtn').addEventListener('click', commit);
+      input.addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); commit(); } });
+      document.getElementById('cancelAddInstanceBtn').addEventListener('click', rebuildInstanceTabsAndPanes);
+    });
+  }
 }
 function renderClientLogoPreview(client){
   const img = document.getElementById('clientLogoPreview');
@@ -1468,28 +1526,22 @@ function openModal(clientId){
   if(!client.applicationTypes) client.applicationTypes = [];
   document.getElementById('modalTitle').textContent = editingClientId ? 'Edit client' : 'New client';
   document.getElementById('clientNameInput').value = client.name || '';
-  document.getElementById('instancePanes').innerHTML = buildInstancePanesHTML(client.instances);
+  window.__modalClient = client;
+  document.getElementById('instanceTabsBar').innerHTML = renderInstanceTabs(client);
+  document.getElementById('instancePanes').innerHTML = buildInstancePanesHTML(client);
+  attachInstanceTabListeners();
   attachModeToggleListeners();
   document.getElementById('deleteClientBtn').classList.toggle('hidden', !(editingClientId && currentUserRole === 'admin'));
-  document.querySelectorAll('.instance-tab-btn').forEach(b=>b.classList.toggle('active', b.getAttribute('data-tab')===activeTab));
   document.getElementById('clientLogoInput').value = '';
   document.getElementById('clientLogoStatus').textContent = 'JPG, PNG, GIF, WEBP or SVG.';
   document.getElementById('appTypeDropdownPanel').classList.add('hidden');
   renderClientLogoPreview(client);
-  window.__modalClient = client;
   renderAppTypeDropdownPanel(client);
   updateAppTypeButtonLabel(client);
   document.getElementById('modalOverlay').style.display='flex';
   document.getElementById('clientNameInput').focus();
 }
 function closeModal(){ document.getElementById('modalOverlay').style.display='none'; }
-document.querySelectorAll('.instance-tab-btn').forEach(btn=>{
-  btn.addEventListener('click', ()=>{
-    activeTab = btn.getAttribute('data-tab');
-    document.querySelectorAll('.instance-tab-btn').forEach(b=>b.classList.toggle('active', b===btn));
-    document.querySelectorAll('.instance-pane').forEach(p=>p.classList.toggle('active', p.getAttribute('data-pane')===activeTab));
-  });
-});
 document.getElementById('newClientBtn').addEventListener('click', ()=>openModal(null));
 document.getElementById('emptyAddBtn').addEventListener('click', ()=>openModal(null));
 document.getElementById('cancelModalBtn').addEventListener('click', closeModal);
