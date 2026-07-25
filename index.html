@@ -152,6 +152,43 @@ textarea{font-family:'Inter',sans-serif; resize:vertical; min-height:60px;}
 .chart-type-btn.active{background:var(--border); color:var(--text);}
 
 .chart-wrapper{position:relative; height:320px;}
+
+/* ---- CONTACT INFORMATION (client detail + modal) ---- */
+.contacts-section{margin-top:26px;}
+.contacts-section-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;}
+.contacts-section-head h2{font-family:'JetBrains Mono',monospace; font-size:14px; letter-spacing:1px; text-transform:uppercase; color:var(--text-dim); margin:0;}
+.contacts-section-head .opt-tag{font-size:10.5px; color:var(--text-dim); font-weight:400; text-transform:none; letter-spacing:0; margin-left:8px;}
+.contacts-grid{display:grid; grid-template-columns:repeat(auto-fit, minmax(260px,1fr)); gap:14px;}
+.contact-card{background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:16px 18px; display:flex; gap:12px; align-items:flex-start;}
+.contact-avatar{width:38px; height:38px; border-radius:50%; background:var(--accent-soft); color:var(--accent); display:flex; align-items:center; justify-content:center; font-family:'JetBrains Mono',monospace; font-weight:700; font-size:14px; flex-shrink:0;}
+.contact-card .cbody{min-width:0; flex:1;}
+.contact-card .cname{font-size:13.5px; font-weight:600; color:var(--text);}
+.contact-card .cdesig{font-size:11.5px; color:var(--text-dim); margin-top:1px;}
+.contact-card .cline{font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--text-muted); margin-top:6px; display:flex; align-items:center; gap:6px; word-break:break-all;}
+.contacts-empty{color:var(--text-dim); font-size:12.5px; padding:18px; border:1px dashed var(--border); border-radius:10px; text-align:center;}
+
+/* contact editor rows inside the client modal */
+.contact-edit-row{background:var(--panel-alt); border:1px solid var(--border-soft); border-radius:8px; padding:14px 16px; margin-bottom:10px; position:relative;}
+.contact-edit-grid{display:grid; grid-template-columns:repeat(auto-fit, minmax(180px,1fr)); gap:10px;}
+.contact-edit-grid .form-row{margin-bottom:0;}
+.contact-remove-btn{position:absolute; top:10px; right:10px; background:none; border:none; color:var(--text-dim); cursor:pointer; font-size:16px; line-height:1; padding:2px 6px; border-radius:4px;}
+.contact-remove-btn:hover{color:var(--danger); background:var(--danger-soft);}
+.add-contact-btn{background:transparent; border:1px dashed var(--border); color:var(--text-muted); border-radius:8px; padding:10px; width:100%; cursor:pointer; font-size:12.5px; font-family:'Inter',sans-serif;}
+.add-contact-btn:hover{color:var(--accent); border-color:var(--accent);}
+
+/* ---- CONTACT BOOK DASHBOARD ---- */
+.contact-book-header{display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; gap:16px; flex-wrap:wrap;}
+.contact-book-title{font-family:'JetBrains Mono',monospace; font-size:20px; font-weight:700; margin:0;}
+.contact-book-search{position:relative; max-width:420px; width:100%;}
+.contact-book-search input{padding-left:34px; font-family:'Inter',sans-serif; font-size:13.5px;}
+.contact-book-meta{font-size:11.5px; color:var(--text-dim); margin-bottom:14px;}
+.contact-log-table{width:100%; border-collapse:collapse;}
+.contact-log-table thead th{text-align:left; font-family:'JetBrains Mono',monospace; font-size:10.5px; letter-spacing:1px; text-transform:uppercase; color:var(--text-dim); padding:10px 14px; border-bottom:1px solid var(--border); position:sticky; top:0; background:var(--panel);}
+.contact-log-table tbody td{padding:12px 14px; border-bottom:1px solid var(--border-soft); font-size:13px; vertical-align:middle;}
+.contact-log-table tbody tr:hover{background:var(--panel-alt);}
+.contact-log-client{display:flex; align-items:center; gap:10px; min-width:0;}
+.contact-log-client .cn{overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:600;}
+.contact-log-mono{font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--text-muted);}
 </style>
 </head>
 <body>
@@ -217,6 +254,7 @@ textarea{font-family:'Inter',sans-serif; resize:vertical; min-height:60px;}
       <span class="search-icon">⌕</span>
       <input type="text" id="searchInput" placeholder="Search clients…">
     </div>
+    <button class="btn btn-ghost" id="contactBookBtn">Client Contact Book</button>
     <div class="stat" id="clientCountStat">0 clients</div>
     <div class="topbar-spacer"></div>
     <div class="topbar-actions">
@@ -276,6 +314,15 @@ textarea{font-family:'Inter',sans-serif; resize:vertical; min-height:60px;}
 
     <div class="instance-tabs" id="instanceTabsBar"></div>
     <div id="instancePanes"></div>
+
+    <div class="contacts-section">
+      <div class="contacts-section-head">
+        <h2>Contact information<span class="opt-tag">(optional — does not affect completion %)</span></h2>
+      </div>
+      <div id="contactsEditorList"></div>
+      <button type="button" class="add-contact-btn" id="addContactBtn">+ Add contact person</button>
+    </div>
+
     <div class="modal-footer">
       <div><button class="btn btn-danger hidden" id="deleteClientBtn">Delete client</button></div>
       <div class="modal-footer-right">
@@ -350,6 +397,28 @@ textarea{font-family:'Inter',sans-serif; resize:vertical; min-height:60px;}
     <div class="modal-footer">
       <div></div>
       <div class="modal-footer-right"><button class="btn btn-ghost" id="closeDashboardBtn">Close</button></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="contactBookOverlay">
+  <div class="modal" style="max-width:1000px; width:100%;">
+    <div class="contact-book-header">
+      <div>
+        <h2 style="margin:0 0 4px;">Client Contact Book</h2>
+        <div class="modal-sub" style="margin-bottom:0;">Search by client to find contact people, numbers and emails — all in one log book.</div>
+      </div>
+      <button class="btn btn-ghost" id="contactBookHomeBtn">← Back to home</button>
+    </div>
+    <div class="contact-book-search">
+      <span class="search-icon">⌕</span>
+      <input type="text" id="contactBookSearchInput" placeholder="Search by client name…">
+    </div>
+    <div class="contact-book-meta" id="contactBookMeta"></div>
+    <div id="contactBookListWrap" style="max-height:60vh; overflow-y:auto; border:1px solid var(--border); border-radius:8px;"></div>
+    <div class="modal-footer">
+      <div></div>
+      <div class="modal-footer-right"><button class="btn btn-ghost" id="closeContactBookBtn">Close</button></div>
     </div>
   </div>
 </div>
@@ -473,7 +542,8 @@ function emptyInstance(){
     connectionProcess:'', vpnName:'', vpnUsername:'', vpnPassword:'', notes:''
   };
 }
-function emptyClient(){ return { id: crypto.randomUUID(), name:'', logoUrl:'', applicationTypes:[], instances:{training:emptyInstance(), validation:emptyInstance(), production:emptyInstance()} }; }
+function emptyClient(){ return { id: crypto.randomUUID(), name:'', logoUrl:'', applicationTypes:[], instances:{training:emptyInstance(), validation:emptyInstance(), production:emptyInstance()}, contacts:[] }; }
+function emptyContact(){ return { id: crypto.randomUUID(), name:'', designation:'', phone:'', email:'' }; }
 function escapeHtml(str){ return (str||'').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
 function maskValue(v){ if(!v) return ''; return '•'.repeat(Math.min(Math.max(v.length,6),18)); }
 function showToast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),1800); }
@@ -875,13 +945,15 @@ async function loadClients(){
     id: row.id, name: row.name,
     logoUrl: row.logo_url || '',
     applicationTypes: row.application_types || [],
-    instances: row.instances || {training:emptyInstance(), validation:emptyInstance(), production:emptyInstance()}
+    instances: row.instances || {training:emptyInstance(), validation:emptyInstance(), production:emptyInstance()},
+    contacts: row.contacts || []
   }));
 }
 async function upsertClientRow(client, isNew){
   const payload = {
     id: client.id, name: client.name, instances: client.instances,
     logo_url: client.logoUrl || null, application_types: client.applicationTypes || [],
+    contacts: client.contacts || [],
     updated_at: new Date().toISOString(), updated_by: currentUsername
   };
   if(isNew) payload.created_by = currentUsername;
@@ -1282,7 +1354,11 @@ function renderMain(){
       </div>
       <div class="header-actions"><button class="btn btn-ghost" id="viewHistoryBtn">History</button><button class="btn btn-ghost" id="editClientBtn">Edit</button></div>
     </div>
-    <div class="instances-grid">${visibleInstances.map(t => renderInstanceCard(client, t)).join('')}</div>`;
+    <div class="instances-grid">${visibleInstances.map(t => renderInstanceCard(client, t)).join('')}</div>
+    <div class="contacts-section">
+      <div class="contacts-section-head"><h2>Contact information<span class="opt-tag">optional</span></h2></div>
+      ${renderContactsReadOnly(client)}
+    </div>`;
   document.getElementById('editClientBtn').addEventListener('click', ()=> openModal(client.id));
   document.getElementById('viewHistoryBtn').addEventListener('click', async ()=>{
     await loadAuditLog();
@@ -1302,6 +1378,79 @@ function renderMain(){
   });
 }
 document.getElementById('brandHomeBtn').addEventListener('click', ()=>{
+  selectedClientId = null;
+  document.getElementById('mainEmpty').classList.add('hidden');
+  document.getElementById('clientDetail').classList.add('hidden');
+  document.getElementById('dashboardView').classList.remove('hidden');
+  renderDashboard();
+});
+
+/* ---------------- CLIENT CONTACT BOOK (dashboard) ---------------- */
+let contactBookQuery = '';
+function renderContactBook(){
+  const q = contactBookQuery.trim().toLowerCase();
+  const metaEl = document.getElementById('contactBookMeta');
+  const wrap = document.getElementById('contactBookListWrap');
+
+  const matchingClients = [...clients]
+    .filter(c => !q || (c.name||'').toLowerCase().includes(q))
+    .sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+
+  const rows = [];
+  matchingClients.forEach(c=>{
+    (c.contacts||[]).forEach(ct=>{
+      rows.push({ client: c, contact: ct });
+    });
+  });
+
+  if(clients.length === 0){
+    metaEl.textContent = 'No clients yet.';
+    wrap.innerHTML = `<div class="contacts-empty" style="border:none;">Add a client first, then add contact people to see them here.</div>`;
+    return;
+  }
+  if(matchingClients.length === 0){
+    metaEl.textContent = 'No matching clients.';
+    wrap.innerHTML = `<div class="contacts-empty" style="border:none;">No clients match "${escapeHtml(contactBookQuery)}".</div>`;
+    return;
+  }
+  if(rows.length === 0){
+    metaEl.textContent = `${matchingClients.length} matching client${matchingClients.length===1?'':'s'}, but none have contact people added yet.`;
+    wrap.innerHTML = `<div class="contacts-empty" style="border:none;">No contacts on file for the matching client(s) yet.</div>`;
+    return;
+  }
+  metaEl.textContent = `${rows.length} contact${rows.length===1?'':'s'} across ${matchingClients.length} matching client${matchingClients.length===1?'':'s'}.`;
+  wrap.innerHTML = `
+    <table class="contact-log-table">
+      <thead><tr>
+        <th>Client</th><th>Contact person</th><th>Designation</th><th>Number</th><th>Email</th>
+      </tr></thead>
+      <tbody>
+        ${rows.map(r => `
+          <tr>
+            <td><div class="contact-log-client">${avatarHtml(r.client, 26)}<span class="cn">${escapeHtml(r.client.name||'Untitled client')}</span></div></td>
+            <td>${escapeHtml(r.contact.name || '—')}</td>
+            <td>${escapeHtml(r.contact.designation || '—')}</td>
+            <td class="contact-log-mono">${r.contact.phone ? escapeHtml(r.contact.phone) : '—'}</td>
+            <td class="contact-log-mono">${r.contact.email ? escapeHtml(r.contact.email) : '—'}</td>
+          </tr>`).join('')}
+      </tbody>
+    </table>`;
+}
+document.getElementById('contactBookBtn').addEventListener('click', ()=>{
+  contactBookQuery = '';
+  document.getElementById('contactBookSearchInput').value = '';
+  renderContactBook();
+  document.getElementById('contactBookOverlay').style.display = 'flex';
+});
+document.getElementById('contactBookSearchInput').addEventListener('input', (e)=>{
+  contactBookQuery = e.target.value;
+  renderContactBook();
+});
+function closeContactBook(){ document.getElementById('contactBookOverlay').style.display = 'none'; }
+document.getElementById('closeContactBookBtn').addEventListener('click', closeContactBook);
+document.getElementById('contactBookOverlay').addEventListener('click', e=>{ if(e.target.id==='contactBookOverlay') closeContactBook(); });
+document.getElementById('contactBookHomeBtn').addEventListener('click', ()=>{
+  closeContactBook();
   selectedClientId = null;
   document.getElementById('mainEmpty').classList.add('hidden');
   document.getElementById('clientDetail').classList.add('hidden');
@@ -1347,6 +1496,29 @@ function renderInstanceCard(client, type){
     </div>
     <div class="instance-body">${urlHtml}<div class="divider"></div>${serverHtml}<div class="divider"></div>${sharedHtml}</div>
   </div>`;
+}
+
+function contactInitials(name){
+  const parts = (name||'').trim().split(/\s+/).filter(Boolean);
+  if(parts.length === 0) return '?';
+  if(parts.length === 1) return parts[0].charAt(0).toUpperCase();
+  return (parts[0].charAt(0) + parts[parts.length-1].charAt(0)).toUpperCase();
+}
+function renderContactsReadOnly(client){
+  const contacts = client.contacts || [];
+  if(contacts.length === 0){
+    return `<div class="contacts-empty">No contact persons added yet. Click "Edit" to add one.</div>`;
+  }
+  return `<div class="contacts-grid">${contacts.map(c => `
+    <div class="contact-card">
+      <div class="contact-avatar">${escapeHtml(contactInitials(c.name))}</div>
+      <div class="cbody">
+        <div class="cname">${escapeHtml(c.name || 'Unnamed contact')}</div>
+        ${c.designation ? `<div class="cdesig">${escapeHtml(c.designation)}</div>` : ''}
+        ${c.phone ? `<div class="cline"><span>☎ ${escapeHtml(c.phone)}</span><button class="icon-btn" data-action="copy" data-value="${escapeHtml(c.phone)}">COPY</button></div>` : ''}
+        ${c.email ? `<div class="cline"><span>✉ ${escapeHtml(c.email)}</span><button class="icon-btn" data-action="copy" data-value="${escapeHtml(c.email)}">COPY</button></div>` : ''}
+      </div>
+    </div>`).join('')}</div>`;
 }
 
 /* ---------------- MODAL ---------------- */
@@ -1502,6 +1674,63 @@ function updateAppTypeButtonLabel(client){
   const btn = document.getElementById('appTypeDropdownBtn');
   btn.textContent = client.applicationTypes.length ? client.applicationTypes.join(', ') : 'Select application types';
 }
+
+/* ---------------- CONTACT INFORMATION (modal editor) ---------------- */
+function renderContactsEditor(client){
+  const list = document.getElementById('contactsEditorList');
+  if(!client.contacts || client.contacts.length === 0){
+    list.innerHTML = '';
+    return;
+  }
+  list.innerHTML = client.contacts.map((c,idx) => `
+    <div class="contact-edit-row" data-contact-id="${c.id}">
+      <button type="button" class="contact-remove-btn" data-remove-contact="${c.id}" title="Remove this contact">✕</button>
+      <div class="contact-edit-grid">
+        <div class="form-row">
+          <label class="field-label">Contact person name</label>
+          <input type="text" data-contact-field="name" data-contact-id="${c.id}" value="${escapeHtml(c.name||'')}" style="font-family:'Inter',sans-serif;" placeholder="e.g. Jane Doe">
+        </div>
+        <div class="form-row">
+          <label class="field-label">Designation</label>
+          <input type="text" data-contact-field="designation" data-contact-id="${c.id}" value="${escapeHtml(c.designation||'')}" style="font-family:'Inter',sans-serif;" placeholder="e.g. IT Manager">
+        </div>
+        <div class="form-row">
+          <label class="field-label">Contact number</label>
+          <input type="text" data-contact-field="phone" data-contact-id="${c.id}" value="${escapeHtml(c.phone||'')}" placeholder="e.g. +1 555 123 4567">
+        </div>
+        <div class="form-row">
+          <label class="field-label">Email ID</label>
+          <input type="email" data-contact-field="email" data-contact-id="${c.id}" value="${escapeHtml(c.email||'')}" style="font-family:'Inter',sans-serif;" placeholder="e.g. jane@client.com">
+        </div>
+      </div>
+    </div>`).join('');
+  attachContactsEditorListeners();
+}
+function attachContactsEditorListeners(){
+  document.querySelectorAll('#contactsEditorList [data-contact-field]').forEach(el=>{
+    el.addEventListener('input', ()=>{
+      const client = window.__modalClient;
+      const id = el.getAttribute('data-contact-id');
+      const field = el.getAttribute('data-contact-field');
+      const c = (client.contacts||[]).find(x=>x.id===id);
+      if(c) c[field] = el.value;
+    });
+  });
+  document.querySelectorAll('#contactsEditorList [data-remove-contact]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const client = window.__modalClient;
+      const id = btn.getAttribute('data-remove-contact');
+      client.contacts = (client.contacts||[]).filter(x=>x.id!==id);
+      renderContactsEditor(client);
+    });
+  });
+}
+document.getElementById('addContactBtn').addEventListener('click', ()=>{
+  const client = window.__modalClient;
+  if(!client.contacts) client.contacts = [];
+  client.contacts.push(emptyContact());
+  renderContactsEditor(client);
+});
 document.getElementById('appTypeDropdownBtn').addEventListener('click', (e)=>{
   e.stopPropagation();
   document.getElementById('appTypeDropdownPanel').classList.toggle('hidden');
@@ -1541,6 +1770,8 @@ function openModal(clientId){
   renderClientLogoPreview(client);
   renderAppTypeDropdownPanel(client);
   updateAppTypeButtonLabel(client);
+  if(!client.contacts) client.contacts = [];
+  renderContactsEditor(client);
   document.getElementById('modalOverlay').style.display='flex';
   document.getElementById('clientNameInput').focus();
 }
