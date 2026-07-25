@@ -438,6 +438,7 @@ const SHARED_FIELDS = [
 ];
 function serverFieldKey(prefix, coreKey){ return prefix + coreKey.charAt(0).toUpperCase() + coreKey.slice(1); }
 function allInstanceFieldDescriptors(){
+  const url = [{key:'url', label:'URL', secret:false}];
   const core = SERVER_CORE_FIELDS.map(f=>({key:f.key, label:f.label, secret:!!f.secret}));
   const multi = [];
   SERVER_COLUMNS.forEach(col=>{
@@ -446,7 +447,7 @@ function allInstanceFieldDescriptors(){
     });
   });
   const shared = SHARED_FIELDS.map(f=>({key:f.key, label:f.label, secret:!!f.secret}));
-  return [...core, ...multi, ...shared];
+  return [...url, ...core, ...multi, ...shared];
 }
 
 let clients = [];
@@ -465,7 +466,7 @@ const DEFAULT_COMPANY_LOGO = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAACyAA
 
 function emptyInstance(){
   return {
-    mode:'single',
+    mode:'single', url:'',
     serverName:'', serverIp:'', serverPassword:'',
     apiServerName:'', apiServerIp:'', apiServerPassword:'',
     dbServerName:'', dbServerIp:'', dbServerPassword:'',
@@ -1021,7 +1022,7 @@ function computeCompletionPercent(client){
     const coreKeys = mode === 'multiple'
       ? SERVER_COLUMNS.flatMap(col => SERVER_CORE_FIELDS.map(f=>serverFieldKey(col.prefix,f.key)))
       : SERVER_CORE_FIELDS.map(f=>f.key);
-    const sharedKeys = SHARED_FIELDS.map(f=>f.key);
+    const sharedKeys = ['url', ...SHARED_FIELDS.map(f=>f.key)];
     [...coreKeys, ...sharedKeys].forEach(k=>{
       total++;
       if(inst[k] && String(inst[k]).trim() !== '') filled++;
@@ -1321,6 +1322,7 @@ function kvRow(client, type, field, raw){
 function renderInstanceCard(client, type){
   const inst = client.instances[type.key] || emptyInstance();
   const mode = inst.mode || 'single';
+  const urlHtml = kvRow(client, type, {key:'url', label:`${type.label} URL`}, inst.url||'');
   let serverHtml;
   if(mode === 'multiple'){
     const colsHtml = SERVER_COLUMNS.map(col => {
@@ -1343,7 +1345,7 @@ function renderInstanceCard(client, type){
       <span class="instance-tag ${type.tagClass}">${type.label}</span>
       ${mode==='multiple' ? `<span style="font-family:'JetBrains Mono',monospace; font-size:9px; letter-spacing:1px; color:var(--text-dim); text-transform:uppercase; border:1px solid var(--border); border-radius:4px; padding:2px 6px;">API/WEB + DB</span>` : ''}
     </div>
-    <div class="instance-body">${serverHtml}<div class="divider"></div>${sharedHtml}</div>
+    <div class="instance-body">${urlHtml}<div class="divider"></div>${serverHtml}<div class="divider"></div>${sharedHtml}</div>
   </div>`;
 }
 
@@ -1377,6 +1379,7 @@ function buildInstancePanesHTML(client){
           <button type="button" class="btn ${mode==='multiple'?'btn-primary':'btn-ghost'}" data-mode-btn="multiple" data-instance="${t.key}" style="flex:1;">Multiple (API/Web + DB)</button>
         </div>
       </div>`;
+    const urlHtml = fieldInputHtml(t, {key:'url', label:`${t.label} URL`}, inst.url);
     let serverHtml;
     if(mode === 'multiple'){
       serverHtml = `<div class="form-grid">
@@ -1390,7 +1393,7 @@ function buildInstancePanesHTML(client){
       serverHtml = SERVER_CORE_FIELDS.map(f => fieldInputHtml(t, f, inst[f.key])).join('');
     }
     const sharedHtml = SHARED_FIELDS.map(f => fieldInputHtml(t, f, inst[f.key])).join('');
-    return `<div class="instance-pane ${t.key===activeTab?'active':''}" data-pane="${t.key}">${modeToggleHtml}${serverHtml}${sharedHtml}</div>`;
+    return `<div class="instance-pane ${t.key===activeTab?'active':''}" data-pane="${t.key}">${modeToggleHtml}${urlHtml}${serverHtml}${sharedHtml}</div>`;
   }).join('');
 }
 function commitAllInstancePaneValues(){
