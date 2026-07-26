@@ -1219,6 +1219,12 @@ function computeCompletionPercent(client){
   });
   return total === 0 ? 0 : Math.round((filled/total)*100);
 }
+function goToClientDetails(clientId){
+  if(!clientId) return;
+  selectedClientId = clientId;
+  renderSidebar();
+  renderMain();
+}
 function completionColor(pct){
   if(pct >= 80) return '#6FCF97';
   if(pct >= 50) return '#E9B44C';
@@ -1315,6 +1321,7 @@ function renderDashboard(){
       <div id="dashCompletionChartWrap" style="max-height:480px; overflow-y:auto; border:1px solid var(--border); border-radius:8px; padding:8px;">
         <div id="dashCompletionChartInner" style="position:relative;"></div>
       </div>
+      <div class="chart-hint">Click a client to open their details</div>
     </div>
   `;
 
@@ -1367,7 +1374,7 @@ function renderCompletionChart(){
   const metaEl = document.getElementById('dashCompletionMeta');
   if(!metaEl) return; // dashboard not currently on screen
   const q = completionSearchQuery.trim().toLowerCase();
-  let list = clients.map(c => ({ name: c.name || 'Untitled client', pct: computeCompletionPercent(c) }));
+  let list = clients.map(c => ({ id: c.id, name: c.name || 'Untitled client', pct: computeCompletionPercent(c) }));
   if(q) list = list.filter(c => c.name.toLowerCase().includes(q));
   list.sort((a,b) => a.pct - b.pct); // lowest completion first, easiest to spot gaps
 
@@ -1387,7 +1394,7 @@ function renderCompletionChart(){
     inner.style.height = 'auto';
     if(shown.length === 0){ inner.innerHTML = ''; return; }
     inner.innerHTML = shown.map(c => `
-      <div class="bar3d-row">
+      <div class="bar3d-row" data-client-id="${c.id}" style="cursor:pointer;" title="View ${escapeHtml(c.name)}'s details">
         <div class="bar3d-label" title="${escapeHtml(c.name)}">${escapeHtml(c.name)}</div>
         <div class="bar3d-track"><div class="bar3d-fill" data-target-width="${c.pct}" style="background:${completionColor(c.pct)};"></div></div>
         <div class="bar3d-pct">${c.pct}%</div>
@@ -1395,6 +1402,9 @@ function renderCompletionChart(){
     // animate bars growing in on next frame for a soft entrance
     requestAnimationFrame(()=>{
       inner.querySelectorAll('.bar3d-fill').forEach(el=>{ el.style.width = el.getAttribute('data-target-width') + '%'; });
+    });
+    inner.querySelectorAll('.bar3d-row').forEach(row => {
+      row.addEventListener('click', () => goToClientDetails(row.getAttribute('data-client-id')));
     });
     return;
   }
@@ -1419,6 +1429,14 @@ function renderCompletionChart(){
       },
       options: {
         indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+        onClick: (evt, elements) => {
+          if(!elements || !elements.length) return;
+          const target = shown[elements[0].index];
+          if(target) goToClientDetails(target.id);
+        },
+        onHover: (evt, elements) => {
+          evt.native.target.style.cursor = elements.length ? 'pointer' : 'default';
+        },
         plugins: { legend: { display:false }, tooltip: { callbacks: { label: (ctx) => ctx.parsed.x + '% complete' } } },
         scales: {
           x: {
@@ -1457,7 +1475,10 @@ function renderMainChart(counts) {
     wrap.className = 'chart-3d-wrapper';
     wrap.innerHTML = '<div class="chart-3d-hint">drag to rotate</div>';
     try {
-      dashboard3D.main = create3DChart(wrap, { type: currentChartType, labels, data, colors });
+      dashboard3D.main = create3DChart(wrap, {
+        type: currentChartType, labels, data, colors, valueMode: chartValueMode,
+        onPick: (appType) => { selectedChartAppType = appType; showClientsForAppType(appType); }
+      });
     } catch(e) {
       chartRenderError(wrap, e.message || String(e));
     }
@@ -1627,7 +1648,7 @@ function makeLabelSprite(text, opts){
 }
 
 function create3DChart(container, cfg){
-  const { type, labels, data, colors } = cfg;
+  const { type, labels, data, colors, valueMode, onPick } = cfg;
   const maxVal = Math.max(1, ...data);
   const width = container.clientWidth || 400;
   const height = container.clientHeight || 320;
@@ -1685,6 +1706,7 @@ function create3DChart(container, cfg){
       const mesh = new THREE.Mesh(geo, mat);
       mesh.position.set(x, h / 2, 0);
       mesh.scale.y = 0.001;
+      mesh.userData.label = label;
       group.add(mesh);
       finalScales.push({ mesh, targetY: 1, baseHeight: h });
 
@@ -1732,6 +1754,7 @@ function create3DChart(container, cfg){
       const mat = new THREE.MeshStandardMaterial({ color, metalness: 0.3, roughness: 0.32, emissive: color, emissiveIntensity: 0.1 });
       const mesh = new THREE.Mesh(geo, mat);
       mesh.rotation.x = -Math.PI / 2;
+      mesh.userData.label = label;
 
       const mid = (start + end) / 2;
       const explode = 0.1;
@@ -1742,7 +1765,8 @@ function create3DChart(container, cfg){
 
       const pct = Math.round((val / total) * 100);
       const labelR = outerR + 0.55;
-      const lbl = makeLabelSprite(`${label} · ${pct}%`, { worldHeight: 0.28, fontSize: 32, color: isLight ? 'rgba(27,30,36,0.8)' : 'rgba(231,233,238,0.9)' });
+      const valueText = valueMode === 'count' ? `${label} · ${val}` : `${label} · ${pct}%`;
+      const lbl = makeLabelSprite(valueText, { worldHeight: 0.28, fontSize: 32, color: isLight ? 'rgba(27,30,36,0.8)' : 'rgba(231,233,238,0.9)' });
       lbl.position.set(Math.cos(mid) * labelR, depth / 2, -Math.sin(mid) * labelR);
       group.add(lbl);
     });
@@ -1753,32 +1777,60 @@ function create3DChart(container, cfg){
 
   camera.lookAt(0, type === 'bar' ? 0.6 : 0, 0);
 
-  // ---- interaction: drag to rotate, gentle momentum, resumes slow auto-rotate ----
-  let isDragging = false, prevX = 0, prevY = 0, velY = 0;
-  const AUTO_SPEED = 0.0022;
+  // ---- interaction: drag to rotate only (no auto-rotate); click a bar/slice to pick it ----
+  let isDragging = false, prevX = 0, prevY = 0, velY = 0, downX = 0, downY = 0, didDrag = false;
   const dom = renderer.domElement;
+  const raycaster = new THREE.Raycaster();
+  const mouseVec = new THREE.Vector2();
+  function pickableTargets(){
+    return group.children.filter(o => o.isMesh && o.userData && o.userData.label !== undefined);
+  }
+  function pickAt(clientX, clientY){
+    const rect = dom.getBoundingClientRect();
+    mouseVec.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+    mouseVec.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+    raycaster.setFromCamera(mouseVec, camera);
+    const hits = raycaster.intersectObjects(pickableTargets(), false);
+    return hits.length ? hits[0].object.userData.label : null;
+  }
   function onDown(e){
-    isDragging = true; velY = 0;
+    isDragging = true; velY = 0; didDrag = false;
     const p = e.touches ? e.touches[0] : e;
     prevX = p.clientX; prevY = p.clientY;
+    downX = p.clientX; downY = p.clientY;
   }
   function onMove(e){
-    if(!isDragging) return;
+    if(!isDragging){
+      if(onPick){
+        const label = pickAt(e.clientX, e.clientY);
+        dom.style.cursor = label ? 'pointer' : 'grab';
+      }
+      return;
+    }
     const p = e.touches ? e.touches[0] : e;
     const dx = p.clientX - prevX;
     const dy = p.clientY - prevY;
+    if(Math.abs(p.clientX - downX) > 4 || Math.abs(p.clientY - downY) > 4) didDrag = true;
     velY = dx * 0.006;
     group.rotation.y += velY;
     group.rotation.x = Math.max(-0.6, Math.min(0.6, group.rotation.x + dy * 0.004));
     prevX = p.clientX; prevY = p.clientY;
   }
-  function onUp(){ isDragging = false; }
+  function onUp(e){
+    isDragging = false;
+    if(!didDrag && onPick){
+      const p = e.changedTouches ? e.changedTouches[0] : e;
+      const label = pickAt(p.clientX, p.clientY);
+      if(label) onPick(label);
+    }
+  }
   dom.addEventListener('pointerdown', onDown);
   window.addEventListener('pointermove', onMove);
   window.addEventListener('pointerup', onUp);
   dom.addEventListener('touchstart', onDown, { passive: true });
   dom.addEventListener('touchmove', onMove, { passive: true });
   dom.addEventListener('touchend', onUp);
+  if(onPick) dom.style.cursor = 'grab';
 
   // ---- resize handling ----
   let resizeObserver = null;
@@ -1820,13 +1872,9 @@ function create3DChart(container, cfg){
       }
     });
 
-    if(!isDragging){
-      if(Math.abs(velY) > 0.0001){
-        group.rotation.y += velY;
-        velY *= 0.94;
-      } else {
-        group.rotation.y += AUTO_SPEED;
-      }
+    if(!isDragging && Math.abs(velY) > 0.0001){
+      group.rotation.y += velY;
+      velY *= 0.94;
     }
 
     // gentle soothing "breathing" bob
