@@ -157,7 +157,7 @@ textarea{font-family:'Inter',sans-serif; resize:vertical; min-height:60px;}
 .dashboard-card .big-number{font-family:'JetBrains Mono',monospace; font-size:48px; font-weight:700; color:var(--accent); margin:0; line-height:1;}
 .dashboard-card .sub-text{font-size:12px; color:var(--text-muted); margin-top:12px;}
 
-.chart-grid{display:grid; grid-template-columns:repeat(auto-fit, minmax(520px,1fr)); gap:20px;}
+.chart-grid{display:grid; grid-template-columns:repeat(auto-fit, minmax(400px,1fr)); gap:20px;}
 .chart-container{background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:20px; min-width:0;}
 .chart-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; gap:12px; flex-wrap:wrap;}
 .chart-head h3{font-family:'JetBrains Mono',monospace; font-size:12px; letter-spacing:1px; text-transform:uppercase; color:var(--text-dim); margin:0;}
@@ -168,11 +168,8 @@ textarea{font-family:'Inter',sans-serif; resize:vertical; min-height:60px;}
 .chart-download-btn{display:flex; align-items:center; gap:5px; background:var(--panel-alt); border:1px solid var(--border); color:var(--text-muted); padding:5px 10px; font-size:11px; cursor:pointer; border-radius:6px; font-family:'Inter',sans-serif; transition:all .15s;}
 .chart-download-btn:hover{color:var(--accent); border-color:var(--accent);}
 
-.chart-wrapper{position:relative; height:min(60vh, 480px); min-height:360px; width:100%;}
+.chart-wrapper{position:relative; height:420px; width:100%;}
 .chart-hint{font-size:11px; color:var(--text-dim); margin-top:10px; text-align:center;}
-.chart-client-list{margin-top:16px; border-top:1px solid var(--border-soft); padding-top:14px;}
-.chart-client-list-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; font-size:12.5px; color:var(--text-muted);}
-.chart-client-list-head strong{color:var(--text);}
 .chart-client-list-body{display:flex; flex-wrap:wrap; gap:8px;}
 .chart-client-chip{background:var(--panel-alt); border:1px solid var(--border); color:var(--text); padding:6px 12px; border-radius:20px; font-size:12px; cursor:pointer; transition:all .15s;}
 .chart-client-chip:hover{border-color:var(--accent); color:var(--accent);}
@@ -186,7 +183,7 @@ textarea{font-family:'Inter',sans-serif; resize:vertical; min-height:60px;}
 .dim-btn:hover:not(.active){color:var(--text);}
 
 /* ---- 3D CHART CONTAINERS ---- */
-.chart-3d-wrapper{position:relative; height:min(60vh, 480px); min-height:360px; border-radius:10px; overflow:hidden; cursor:grab;
+.chart-3d-wrapper{position:relative; height:420px; border-radius:10px; overflow:hidden; cursor:grab;
   background:
     radial-gradient(circle at 25% 15%, rgba(95,168,211,0.14), transparent 45%),
     radial-gradient(circle at 78% 85%, rgba(233,180,76,0.14), transparent 45%),
@@ -462,6 +459,18 @@ textarea{font-family:'Inter',sans-serif; resize:vertical; min-height:60px;}
   </div>
 </div>
 
+<div class="modal-overlay" id="chartClientsOverlay">
+  <div class="modal" style="max-width:520px;">
+    <h2 id="chartClientsTitle">Clients</h2>
+    <div class="modal-sub" id="chartClientsSub">Customers with this application.</div>
+    <div id="chartClientsListBody" class="chart-client-list-body" style="max-height:50vh; overflow-y:auto; padding-right:4px;"></div>
+    <div class="modal-footer">
+      <div></div>
+      <div class="modal-footer-right"><button class="btn btn-ghost" id="closeChartClientsBtn">Close</button></div>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="contactBookOverlay">
   <div class="modal" style="max-width:1000px; width:100%;">
     <div class="contact-book-header">
@@ -726,6 +735,8 @@ document.getElementById('activityBtn').addEventListener('click', async ()=>{
 });
 document.getElementById('closeActivityBtn').addEventListener('click', ()=>{ document.getElementById('activityOverlay').style.display='none'; });
 document.getElementById('activityOverlay').addEventListener('click', e=>{ if(e.target.id==='activityOverlay') document.getElementById('activityOverlay').style.display='none'; });
+document.getElementById('closeChartClientsBtn').addEventListener('click', ()=>{ document.getElementById('chartClientsOverlay').style.display='none'; });
+document.getElementById('chartClientsOverlay').addEventListener('click', e=>{ if(e.target.id==='chartClientsOverlay') document.getElementById('chartClientsOverlay').style.display='none'; });
 document.getElementById('activitySearchInput').addEventListener('input', renderActivityList);
 
 /* ---------------- TEAM ACCESS (admin approval workflow) ---------------- */
@@ -1272,7 +1283,6 @@ function renderDashboard(){
         </div>
         <div class="${chartDimension==='3d'?'chart-3d-wrapper':'chart-wrapper'}" id="mainDashboardChartWrap"></div>
         ${chartDimension==='2d' ? `<div class="chart-hint">Click a ${currentChartType==='bar'?'bar':'slice'} to see which clients have that application</div>` : ''}
-        <div class="chart-client-list" id="mainChartClientList"></div>
       </div>
     </div>
 
@@ -1334,7 +1344,6 @@ function renderDashboard(){
 
   renderMainChart(counts);
   renderCompletionChart();
-  showClientsForAppType(selectedChartAppType);
   renderSidebar();
 }
 
@@ -1451,8 +1460,8 @@ function renderMainChart(counts) {
         if(!elements || !elements.length) return;
         const idx = elements[0].index;
         const appType = labels[idx];
-        selectedChartAppType = (selectedChartAppType === appType) ? null : appType;
-        showClientsForAppType(selectedChartAppType);
+        selectedChartAppType = appType;
+        showClientsForAppType(appType);
       },
       onHover: (evt, elements) => {
         evt.native.target.style.cursor = elements.length ? 'pointer' : 'default';
@@ -1495,27 +1504,23 @@ function renderMainChart(counts) {
 
 /* ---------------- CHART CLIENT LIST (click a bar/slice to see who has it) ---------------- */
 function showClientsForAppType(appType){
-  const listEl = document.getElementById('mainChartClientList');
-  if(!listEl) return;
-  if(!appType){ listEl.innerHTML = ''; return; }
+  if(!appType) return;
   const matching = clients.filter(c => (c.applicationTypes||[]).includes(appType));
-  listEl.innerHTML = `
-    <div class="chart-client-list-head">
-      <span>Clients with <strong>${escapeHtml(appType)}</strong> (${matching.length})</span>
-      <button class="icon-btn" id="clearChartClientListBtn">✕ Clear</button>
-    </div>
-    <div class="chart-client-list-body">
-      ${matching.length ? matching.map(c => `<div class="chart-client-chip" data-client-id="${c.id}">${escapeHtml(c.name || 'Untitled client')}</div>`).join('') : '<div class="contacts-empty">No clients have this application.</div>'}
-    </div>`;
-  const clearBtn = document.getElementById('clearChartClientListBtn');
-  if(clearBtn) clearBtn.addEventListener('click', () => { selectedChartAppType = null; listEl.innerHTML = ''; });
-  listEl.querySelectorAll('.chart-client-chip').forEach(chip => {
+  document.getElementById('chartClientsTitle').textContent = appType;
+  document.getElementById('chartClientsSub').textContent = `${matching.length} client${matching.length===1?'':'s'} with ${appType}`;
+  const body = document.getElementById('chartClientsListBody');
+  body.innerHTML = matching.length
+    ? matching.map(c => `<div class="chart-client-chip" data-client-id="${c.id}">${escapeHtml(c.name || 'Untitled client')}</div>`).join('')
+    : '<div class="contacts-empty">No clients have this application.</div>';
+  body.querySelectorAll('.chart-client-chip').forEach(chip => {
     chip.addEventListener('click', () => {
+      document.getElementById('chartClientsOverlay').style.display = 'none';
       selectedClientId = chip.getAttribute('data-client-id');
       renderSidebar();
       renderMain();
     });
   });
+  document.getElementById('chartClientsOverlay').style.display = 'flex';
 }
 
 /* ---------------- CHART DOWNLOAD (export canvas as PNG) ---------------- */
