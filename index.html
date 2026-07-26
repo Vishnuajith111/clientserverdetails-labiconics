@@ -183,7 +183,7 @@ textarea{font-family:'Inter',sans-serif; resize:vertical; min-height:60px;}
 .dim-btn:hover:not(.active){color:var(--text);}
 
 /* ---- 3D CHART CONTAINERS ---- */
-.chart-3d-wrapper{position:relative; height:420px; border-radius:10px; overflow:hidden; cursor:grab;
+.chart-3d-wrapper{position:relative; height:520px; border-radius:10px; overflow:hidden; cursor:grab;
   background:
     radial-gradient(circle at 25% 15%, rgba(95,168,211,0.14), transparent 45%),
     radial-gradient(circle at 78% 85%, rgba(233,180,76,0.14), transparent 45%),
@@ -1713,21 +1713,22 @@ function create3DChart(container, cfg){
 
   if(type === 'bar'){
     const n = labels.length;
-    const spacing = 1.15;
-    const barSize = 0.62;
+    const spacing = 1.4;
+    const barSize = 1.05;
     const totalWidth = (n - 1) * spacing;
 
-    // floating platform
+    // floating platform ("glass" disc the bars sit on)
     const platform = new THREE.Mesh(
       new THREE.CylinderGeometry(totalWidth / 2 + 1.1, totalWidth / 2 + 1.3, 0.08, 48),
       new THREE.MeshStandardMaterial({ color: isLight ? 0xe7e9ee : 0x1d212b, metalness: 0.2, roughness: 0.7, transparent: true, opacity: 0.65 })
     );
     platform.position.y = -0.05;
     group.add(platform);
+    const platformTopY = platform.position.y + 0.04; // top face of the glass disc
 
     labels.forEach((label, i) => {
       const val = data[i];
-      const h = Math.max(0.08, (val / maxVal) * 2.6);
+      const h = Math.max(0.1, (val / maxVal) * 3.8);
       const x = -totalWidth / 2 + i * spacing;
       const color = new THREE.Color(colors[i % colors.length]);
 
@@ -1740,16 +1741,18 @@ function create3DChart(container, cfg){
       group.add(mesh);
       finalScales.push({ mesh, targetY: 1, baseHeight: h });
 
-      const valueLabel = makeLabelSprite(String(val), { worldHeight: 0.34, color: isLight ? 'rgba(27,30,36,0.85)' : 'rgba(231,233,238,0.92)' });
-      valueLabel.position.set(x, h + 0.35, 0);
+      const valueLabel = makeLabelSprite(String(val), { worldHeight: 0.46, color: isLight ? 'rgba(27,30,36,0.85)' : 'rgba(231,233,238,0.92)' });
+      valueLabel.position.set(x, h + 0.62, 0);
       group.add(valueLabel);
 
-      const nameLabel = makeLabelSprite(label, { worldHeight: 0.26, fontSize: 34, color: isLight ? 'rgba(27,30,36,0.6)' : 'rgba(136,144,160,0.9)' });
-      nameLabel.position.set(x, -0.35, 0);
+      // Category (x-axis) label now sits at the top of the bar, stacked just below
+      // the value label, instead of down near the glass platform's base.
+      const nameLabel = makeLabelSprite(label, { worldHeight: 0.37, fontSize: 46, color: isLight ? 'rgba(27,30,36,0.75)' : 'rgba(215,219,230,0.92)' });
+      nameLabel.position.set(x, h + 0.22, 0);
       group.add(nameLabel);
     });
 
-    camera.position.set(0, 2.6, totalWidth + 4.2);
+    camera.position.set(0, 2.5, totalWidth + 3.4);
   } else {
     // pie / doughnut
     const total = data.reduce((s, v) => s + v, 0) || 1;
@@ -1802,10 +1805,10 @@ function create3DChart(container, cfg){
     });
 
     group.rotation.x = -0.15; // slight tilt for a pleasant 3/4 view
-    camera.position.set(0, 3.4, 4.6);
+    camera.position.set(0, 3.1, 3.9);
   }
 
-  camera.lookAt(0, type === 'bar' ? 0.6 : 0, 0);
+  camera.lookAt(0, type === 'bar' ? 0.9 : 0, 0);
 
   // ---- interaction: drag to rotate only (no auto-rotate); click a bar/slice to pick it ----
   let isDragging = false, prevX = 0, prevY = 0, velY = 0, downX = 0, downY = 0, didDrag = false;
