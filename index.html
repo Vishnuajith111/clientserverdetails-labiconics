@@ -1179,6 +1179,14 @@ document.getElementById('brandingLogoInput').addEventListener('change', async (e
 
 
 /* -------- DASHBOARD WITH CHARTS -------- */
+(function checkChartLibraries(){
+  const missing = [];
+  if(typeof Chart === 'undefined') missing.push('Chart.js');
+  if(typeof THREE === 'undefined') missing.push('three.js');
+  if(missing.length){
+    console.error('[Dashboard] Failed to load: ' + missing.join(', ') + '. Charts will not render. This is usually caused by an ad-blocker/extension blocking the CDN request, or a network issue — check the browser console Network tab for a failed request to cdn.jsdelivr.net.');
+  }
+})();
 let dashboardCharts = {};
 let dashboard3D = {};
 let currentChartType = 'bar';
@@ -1216,6 +1224,14 @@ function completionColor(pct){
   if(pct >= 50) return '#E9B44C';
   if(pct >= 25) return '#F2A65A';
   return '#E2725B';
+}
+function chartRenderError(container, message){
+  console.error('[Dashboard chart]', message);
+  container.className = 'chart-wrapper';
+  container.innerHTML = `<div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; text-align:center; padding:24px; color:var(--text-dim); font-size:12.5px; line-height:1.6;">
+    ⚠ Couldn't render this chart.<br>${escapeHtml(message)}<br><br>
+    <span style="font-size:11px; opacity:0.8;">Try disabling ad-blockers for this page, check your connection, then refresh.</span>
+  </div>`;
 }
 
 function renderDashboard(){
@@ -1347,22 +1363,11 @@ function renderDashboard(){
   renderSidebar();
 }
 
-/* Navigate straight into a client's detail/edit screen (used by both the app-distribution
-   chart's "clients with this app" list and the data-completion chart's per-client bars). */
-function goToClientDetail(clientId){
-  if(!clientId) return;
-  const overlay = document.getElementById('chartClientsOverlay');
-  if(overlay) overlay.style.display = 'none';
-  selectedClientId = clientId;
-  renderSidebar();
-  renderMain();
-}
-
 function renderCompletionChart(){
   const metaEl = document.getElementById('dashCompletionMeta');
   if(!metaEl) return; // dashboard not currently on screen
   const q = completionSearchQuery.trim().toLowerCase();
-  let list = clients.map(c => ({ id: c.id, name: c.name || 'Untitled client', pct: computeCompletionPercent(c) }));
+  let list = clients.map(c => ({ name: c.name || 'Untitled client', pct: computeCompletionPercent(c) }));
   if(q) list = list.filter(c => c.name.toLowerCase().includes(q));
   list.sort((a,b) => a.pct - b.pct); // lowest completion first, easiest to spot gaps
 
@@ -1374,7 +1379,7 @@ function renderCompletionChart(){
 
   const inner = document.getElementById('dashCompletionChartInner');
 
-  if(dashboardCharts.completion){ dashboardCharts.completion.destroy(); dashboardCharts.completion = null; }
+  if(dashboardCharts.completion){ try{ dashboardCharts.completion.destroy(); }catch(e){} dashboardCharts.completion = null; }
 
   if(chartDimension === '3d'){
     // Stylized extruded 3D-look bars — kept as crisp DOM elements (not a WebGL scene)
@@ -1382,7 +1387,7 @@ function renderCompletionChart(){
     inner.style.height = 'auto';
     if(shown.length === 0){ inner.innerHTML = ''; return; }
     inner.innerHTML = shown.map(c => `
-      <div class="bar3d-row" data-client-id="${c.id}" style="cursor:pointer;" title="Click to open ${escapeHtml(c.name)}">
+      <div class="bar3d-row">
         <div class="bar3d-label" title="${escapeHtml(c.name)}">${escapeHtml(c.name)}</div>
         <div class="bar3d-track"><div class="bar3d-fill" data-target-width="${c.pct}" style="background:${completionColor(c.pct)};"></div></div>
         <div class="bar3d-pct">${c.pct}%</div>
@@ -1391,9 +1396,11 @@ function renderCompletionChart(){
     requestAnimationFrame(()=>{
       inner.querySelectorAll('.bar3d-fill').forEach(el=>{ el.style.width = el.getAttribute('data-target-width') + '%'; });
     });
-    inner.querySelectorAll('.bar3d-row').forEach(row=>{
-      row.addEventListener('click', ()=> goToClientDetail(row.getAttribute('data-client-id')));
-    });
+    return;
+  }
+
+  if(typeof Chart === 'undefined'){
+    chartRenderError(inner, 'The charting library (Chart.js) failed to load.');
     return;
   }
 
@@ -1402,50 +1409,33 @@ function renderCompletionChart(){
   inner.innerHTML = '<canvas id="dashCompletionChart"></canvas>';
   if(shown.length === 0) return;
 
-  // Force a layout flush before Chart.js measures the container — in a CSS grid/flex
-  // layout the canvas can otherwise be measured at 0×0 in the same tick it's inserted,
-  // which is what made the 2D chart render blank while the 3D scene (which falls back
-  // to a fixed default size) looked fine.
-  void inner.offsetHeight;
-
   const ctx = document.getElementById('dashCompletionChart').getContext('2d');
-  dashboardCharts.completion = new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels: shown.map(c => c.name),
-      datasets: [{ data: shown.map(c => c.pct), backgroundColor: shown.map(c => completionColor(c.pct)), borderRadius:4, maxBarThickness:16 }]
-    },
-    options: {
-      indexAxis: 'y', responsive: true, maintainAspectRatio: false,
-      onClick: (evt, elements) => {
-        if(!elements || !elements.length) return;
-        const idx = elements[0].index;
-        goToClientDetail(shown[idx] && shown[idx].id);
+  try {
+    dashboardCharts.completion = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: shown.map(c => c.name),
+        datasets: [{ data: shown.map(c => c.pct), backgroundColor: shown.map(c => completionColor(c.pct)), borderRadius:4, maxBarThickness:16 }]
       },
-      onHover: (evt, elements) => {
-        evt.native.target.style.cursor = elements.length ? 'pointer' : 'default';
-      },
-      plugins: {
-        legend: { display:false },
-        tooltip: { callbacks: {
-          label: (ctx) => ctx.parsed.x + '% complete',
-          afterLabel: () => 'Click to open this client'
-        } }
-      },
-      scales: {
-        x: {
-          min:0, max:100, ticks: { color:chartTextColor(), callback:(v)=>v+'%' }, grid: { color:chartGridColor() },
-          title: { display:true, text:'Completion (%)', color:chartTextColorStrong(), font:{ size:12, weight:'600' } }
-        },
-        y: {
-          ticks: { color:chartTextColor(), font:{size:10.5} }, grid: { display:false },
-          title: { display:true, text:'Client', color:chartTextColorStrong(), font:{ size:12, weight:'600' } }
+      options: {
+        indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display:false }, tooltip: { callbacks: { label: (ctx) => ctx.parsed.x + '% complete' } } },
+        scales: {
+          x: {
+            min:0, max:100, ticks: { color:chartTextColor(), callback:(v)=>v+'%' }, grid: { color:chartGridColor() },
+            title: { display:true, text:'Completion (%)', color:chartTextColorStrong(), font:{ size:12, weight:'600' } }
+          },
+          y: {
+            ticks: { color:chartTextColor(), font:{size:10.5} }, grid: { display:false },
+            title: { display:true, text:'Client', color:chartTextColorStrong(), font:{ size:12, weight:'600' } }
+          }
         }
       }
-    }
-  });
-  // Safety-net resize in case the container still wasn't fully laid out at creation time.
-  requestAnimationFrame(()=>{ if(dashboardCharts.completion) dashboardCharts.completion.resize(); });
+    });
+    requestAnimationFrame(() => { if(dashboardCharts.completion) dashboardCharts.completion.resize(); });
+  } catch(e) {
+    chartRenderError(inner, e.message || String(e));
+  }
 }
 
 function renderMainChart(counts) {
@@ -1456,27 +1446,31 @@ function renderMainChart(counts) {
   const total = data.reduce((s,v)=>s+v,0);
   const colors = ['#E9B44C', '#5FA8D3', '#6FCF97', '#E2725B', '#F0AD4E', '#9B59B6', '#3498DB', '#1ABC9C', '#E74C3C', '#95A5A6'];
 
-  if(dashboardCharts.main){ dashboardCharts.main.destroy(); dashboardCharts.main = null; }
-  if(dashboard3D.main){ dashboard3D.main.dispose(); dashboard3D.main = null; }
+  if(dashboardCharts.main){ try{ dashboardCharts.main.destroy(); }catch(e){} dashboardCharts.main = null; }
+  if(dashboard3D.main){ try{ dashboard3D.main.dispose(); }catch(e){} dashboard3D.main = null; }
 
   if(chartDimension === '3d'){
+    if(typeof THREE === 'undefined'){
+      chartRenderError(wrap, 'The 3D graphics library (three.js) failed to load.');
+      return;
+    }
     wrap.className = 'chart-3d-wrapper';
-    wrap.innerHTML = currentChartType === 'bar'
-      ? '<div class="chart-3d-hint">drag to rotate · click a bar to see clients</div>'
-      : '<div class="chart-3d-hint">drag to rotate · click a slice to see clients</div>';
-    dashboard3D.main = create3DChart(wrap, {
-      type: currentChartType, labels, data, colors,
-      valueMode: chartValueMode,
-      onSliceClick: (label) => { selectedChartAppType = label; showClientsForAppType(label); }
-    });
+    wrap.innerHTML = '<div class="chart-3d-hint">drag to rotate</div>';
+    try {
+      dashboard3D.main = create3DChart(wrap, { type: currentChartType, labels, data, colors });
+    } catch(e) {
+      chartRenderError(wrap, e.message || String(e));
+    }
+    return;
+  }
+
+  if(typeof Chart === 'undefined'){
+    chartRenderError(wrap, 'The charting library (Chart.js) failed to load.');
     return;
   }
 
   wrap.className = 'chart-wrapper';
   wrap.innerHTML = '<canvas id="mainDashboardChart"></canvas>';
-  // Force a layout flush before Chart.js measures the container — see note in
-  // renderCompletionChart() for why this matters (fixes the "blank in 2D" issue).
-  void wrap.offsetHeight;
   const ctx = document.getElementById('mainDashboardChart').getContext('2d');
   const isBar = currentChartType === 'bar';
 
@@ -1486,67 +1480,73 @@ function renderMainChart(counts) {
     return total ? Math.round((val/total)*100) + '%' : '0%';
   };
 
-  dashboardCharts.main = new Chart(ctx, {
-    type: currentChartType,
-    data: {
-      labels: labels,
-      datasets: [{
-        label: 'Clients',
-        data: data,
-        backgroundColor: isBar ? 'rgba(233, 180, 76, 0.7)' : colors,
-        borderColor: isBar ? 'rgba(233, 180, 76, 1)' : 'rgba(22, 25, 32, 1)',
-        borderWidth: 1
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      onClick: (evt, elements) => {
-        if(!elements || !elements.length) return;
-        const idx = elements[0].index;
-        const appType = labels[idx];
-        selectedChartAppType = appType;
-        showClientsForAppType(appType);
+  try {
+    dashboardCharts.main = new Chart(ctx, {
+      type: currentChartType,
+      data: {
+        labels: labels,
+        datasets: [{
+          label: 'Clients',
+          data: data,
+          backgroundColor: isBar ? 'rgba(233, 180, 76, 0.7)' : colors,
+          borderColor: isBar ? 'rgba(233, 180, 76, 1)' : 'rgba(22, 25, 32, 1)',
+          borderWidth: 1
+        }]
       },
-      onHover: (evt, elements) => {
-        evt.native.target.style.cursor = elements.length ? 'pointer' : 'default';
-      },
-      plugins: {
-        legend: {
-          display: !isBar,
-          position: 'bottom',
-          labels: {
-            color: chartTextColorStrong(), boxWidth: 12, font: { size: 11 },
-            generateLabels: (chart) => {
-              const base = Chart.overrides[chart.config.type].plugins.legend.labels.generateLabels(chart);
-              base.forEach((item, i) => { item.text = `${labels[i]}: ${valueLabel(data[i])}`; });
-              return base;
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        onClick: (evt, elements) => {
+          if(!elements || !elements.length) return;
+          const idx = elements[0].index;
+          const appType = labels[idx];
+          selectedChartAppType = appType;
+          showClientsForAppType(appType);
+        },
+        onHover: (evt, elements) => {
+          evt.native.target.style.cursor = elements.length ? 'pointer' : 'default';
+        },
+        plugins: {
+          legend: {
+            display: !isBar,
+            position: 'bottom',
+            labels: {
+              color: chartTextColorStrong(), boxWidth: 12, font: { size: 11 },
+              generateLabels: (chart) => {
+                const base = Chart.overrides[chart.config.type].plugins.legend.labels.generateLabels(chart);
+                base.forEach((item, i) => { item.text = `${labels[i]}: ${valueLabel(data[i])}`; });
+                return base;
+              }
+            }
+          },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => `${ctx.label}: ${valueLabel(ctx.parsed.y !== undefined ? ctx.parsed.y : ctx.parsed)}`
             }
           }
         },
-        tooltip: {
-          callbacks: {
-            label: (ctx) => `${ctx.label}: ${valueLabel(ctx.parsed.y !== undefined ? ctx.parsed.y : ctx.parsed)}`
+        scales: isBar ? {
+          y: {
+            beginAtZero: true,
+            ticks: { color: chartTextColor(), stepSize: 1, precision: 0 },
+            grid: { color: chartGridColor() },
+            title: { display: true, text: 'Number of Clients', color: chartTextColorStrong(), font: { size: 12, weight: '600' } }
+          },
+          x: {
+            ticks: { color: chartTextColor() },
+            grid: { display: false },
+            title: { display: true, text: 'Application Type', color: chartTextColorStrong(), font: { size: 12, weight: '600' } }
           }
-        }
-      },
-      scales: isBar ? {
-        y: {
-          beginAtZero: true,
-          ticks: { color: chartTextColor(), stepSize: 1, precision: 0 },
-          grid: { color: chartGridColor() },
-          title: { display: true, text: 'Number of Clients', color: chartTextColorStrong(), font: { size: 12, weight: '600' } }
-        },
-        x: {
-          ticks: { color: chartTextColor() },
-          grid: { display: false },
-          title: { display: true, text: 'Application Type', color: chartTextColorStrong(), font: { size: 12, weight: '600' } }
-        }
-      } : {}
-    }
-  });
-  // Safety-net resize in case the container still wasn't fully laid out at creation time.
-  requestAnimationFrame(()=>{ if(dashboardCharts.main) dashboardCharts.main.resize(); });
+        } : {}
+      }
+    });
+    // Fallback: some environments (e.g. chart created while briefly hidden, or a
+    // delayed CSS paint) leave Chart.js's auto-resize stuck at its 300x150 default.
+    // Forcing a resize on the next frame, once layout has definitely settled, fixes that.
+    requestAnimationFrame(() => { if(dashboardCharts.main) dashboardCharts.main.resize(); });
+  } catch(e) {
+    chartRenderError(wrap, e.message || String(e));
+  }
 }
 
 /* ---------------- CHART CLIENT LIST (click a bar/slice to see who has it) ---------------- */
@@ -1560,7 +1560,12 @@ function showClientsForAppType(appType){
     ? matching.map(c => `<div class="chart-client-chip" data-client-id="${c.id}">${escapeHtml(c.name || 'Untitled client')}</div>`).join('')
     : '<div class="contacts-empty">No clients have this application.</div>';
   body.querySelectorAll('.chart-client-chip').forEach(chip => {
-    chip.addEventListener('click', () => goToClientDetail(chip.getAttribute('data-client-id')));
+    chip.addEventListener('click', () => {
+      document.getElementById('chartClientsOverlay').style.display = 'none';
+      selectedClientId = chip.getAttribute('data-client-id');
+      renderSidebar();
+      renderMain();
+    });
   });
   document.getElementById('chartClientsOverlay').style.display = 'flex';
 }
@@ -1613,13 +1618,11 @@ function makeLabelSprite(text, opts){
 }
 
 function create3DChart(container, cfg){
-  const { type, labels, data, colors, valueMode, onSliceClick } = cfg;
+  const { type, labels, data, colors } = cfg;
   const maxVal = Math.max(1, ...data);
-  const total = data.reduce((s, v) => s + v, 0) || 1;
-  const isLight = currentTheme === 'light';
   const width = container.clientWidth || 400;
   const height = container.clientHeight || 320;
-  const clickableMeshes = []; // { mesh, label } — used for raycast click selection
+  const isLight = currentTheme === 'light';
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(42, width / height, 0.1, 100);
@@ -1675,7 +1678,6 @@ function create3DChart(container, cfg){
       mesh.scale.y = 0.001;
       group.add(mesh);
       finalScales.push({ mesh, targetY: 1, baseHeight: h });
-      clickableMeshes.push({ mesh, label });
 
       const valueLabel = makeLabelSprite(String(val), { worldHeight: 0.34, color: isLight ? 'rgba(27,30,36,0.85)' : 'rgba(231,233,238,0.92)' });
       valueLabel.position.set(x, h + 0.35, 0);
@@ -1689,6 +1691,7 @@ function create3DChart(container, cfg){
     camera.position.set(0, 2.6, totalWidth + 4.2);
   } else {
     // pie / doughnut
+    const total = data.reduce((s, v) => s + v, 0) || 1;
     const outerR = 2.1;
     const innerR = type === 'doughnut' ? outerR * 0.5 : 0;
     const depth = 0.55;
@@ -1727,12 +1730,10 @@ function create3DChart(container, cfg){
       mesh.scale.set(0.001, 0.001, 0.001);
       group.add(mesh);
       finalScales.push({ mesh, targetScale: 1 });
-      clickableMeshes.push({ mesh, label });
 
       const pct = Math.round((val / total) * 100);
-      const displayVal = valueMode === 'percent' ? `${pct}%` : String(val);
       const labelR = outerR + 0.55;
-      const lbl = makeLabelSprite(`${label} · ${displayVal}`, { worldHeight: 0.28, fontSize: 32, color: isLight ? 'rgba(27,30,36,0.8)' : 'rgba(231,233,238,0.9)' });
+      const lbl = makeLabelSprite(`${label} · ${pct}%`, { worldHeight: 0.28, fontSize: 32, color: isLight ? 'rgba(27,30,36,0.8)' : 'rgba(231,233,238,0.9)' });
       lbl.position.set(Math.cos(mid) * labelR, depth / 2, -Math.sin(mid) * labelR);
       group.add(lbl);
     });
@@ -1743,61 +1744,26 @@ function create3DChart(container, cfg){
 
   camera.lookAt(0, type === 'bar' ? 0.6 : 0, 0);
 
-  // ---- interaction: drag with the mouse to rotate/orbit; no automatic spinning ----
-  // A click that barely moved the pointer is treated as a selection (raycast below)
-  // rather than a drag, mirroring how the 2D charts respond to a click on a bar/slice.
-  let isDragging = false, prevX = 0, prevY = 0, velY = 0, dragDistance = 0;
-  const CLICK_THRESHOLD = 5; // px of total movement below which a pointerup counts as a click
+  // ---- interaction: drag to rotate, gentle momentum, resumes slow auto-rotate ----
+  let isDragging = false, prevX = 0, prevY = 0, velY = 0;
+  const AUTO_SPEED = 0.0022;
   const dom = renderer.domElement;
-  const raycaster = new THREE.Raycaster();
-  const pointerNDC = new THREE.Vector2();
-  function updateHoverCursor(clientX, clientY){
-    if(!onSliceClick || !clickableMeshes.length) return;
-    const rect = dom.getBoundingClientRect();
-    pointerNDC.x = ((clientX - rect.left) / rect.width) * 2 - 1;
-    pointerNDC.y = -((clientY - rect.top) / rect.height) * 2 + 1;
-    raycaster.setFromCamera(pointerNDC, camera);
-    const hit = raycaster.intersectObjects(clickableMeshes.map(c => c.mesh));
-    dom.style.cursor = hit.length ? 'pointer' : 'grab';
-  }
   function onDown(e){
-    isDragging = true; velY = 0; dragDistance = 0;
+    isDragging = true; velY = 0;
     const p = e.touches ? e.touches[0] : e;
     prevX = p.clientX; prevY = p.clientY;
   }
   function onMove(e){
-    if(!isDragging){
-      if(!e.touches) updateHoverCursor(e.clientX, e.clientY);
-      return;
-    }
+    if(!isDragging) return;
     const p = e.touches ? e.touches[0] : e;
     const dx = p.clientX - prevX;
     const dy = p.clientY - prevY;
-    dragDistance += Math.abs(dx) + Math.abs(dy);
     velY = dx * 0.006;
     group.rotation.y += velY;
     group.rotation.x = Math.max(-0.6, Math.min(0.6, group.rotation.x + dy * 0.004));
     prevX = p.clientX; prevY = p.clientY;
   }
-  function onUp(e){
-    isDragging = false;
-    velY = 0; // no momentum carry-over — orientation only changes while the user drags
-    if(onSliceClick && dragDistance < CLICK_THRESHOLD){
-      const p = (e && e.changedTouches) ? e.changedTouches[0] : e;
-      if(p){
-        const rect = dom.getBoundingClientRect();
-        pointerNDC.x = ((p.clientX - rect.left) / rect.width) * 2 - 1;
-        pointerNDC.y = -((p.clientY - rect.top) / rect.height) * 2 + 1;
-        raycaster.setFromCamera(pointerNDC, camera);
-        const hit = raycaster.intersectObjects(clickableMeshes.map(c => c.mesh));
-        if(hit.length){
-          const match = clickableMeshes.find(c => c.mesh === hit[0].object);
-          if(match) onSliceClick(match.label);
-        }
-      }
-    }
-  }
-  dom.style.cursor = 'grab';
+  function onUp(){ isDragging = false; }
   dom.addEventListener('pointerdown', onDown);
   window.addEventListener('pointermove', onMove);
   window.addEventListener('pointerup', onUp);
@@ -1845,8 +1811,19 @@ function create3DChart(container, cfg){
       }
     });
 
-    // Orientation only changes while the user is actively dragging — no auto-rotate
-    // and no idle motion, per the "keep it still unless I move it" requirement.
+    if(!isDragging){
+      if(Math.abs(velY) > 0.0001){
+        group.rotation.y += velY;
+        velY *= 0.94;
+      } else {
+        group.rotation.y += AUTO_SPEED;
+      }
+    }
+
+    // gentle soothing "breathing" bob
+    group.position.y = Math.sin(t * 0.6) * 0.04;
+    warmLight.intensity = 0.9 + Math.sin(t * 0.5) * 0.15;
+    coolLight.intensity = 0.7 + Math.cos(t * 0.45) * 0.12;
 
     renderer.render(scene, camera);
   }
