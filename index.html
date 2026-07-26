@@ -209,6 +209,14 @@ textarea{font-family:'Inter',sans-serif; resize:vertical; min-height:60px;}
 .bar3d-fill::after{content:''; position:absolute; top:0; left:0; right:0; height:45%; background:linear-gradient(rgba(255,255,255,0.4), transparent); border-radius:4px 8px 0 0;}
 .bar3d-fill::before{content:''; position:absolute; right:-7px; top:0; bottom:0; width:9px; background:inherit; filter:brightness(0.65); transform:skewY(28deg); border-radius:0 3px 3px 0; transform-origin:left;}
 .bar3d-pct{font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--text-dim); width:38px; text-align:right; flex-shrink:0;}
+.bar3d-tooltip{position:fixed; pointer-events:none; z-index:500; background:var(--panel); border:1px solid var(--border); border-radius:8px;
+  padding:8px 13px; box-shadow:0 12px 28px rgba(0,0,0,0.28); font-family:'Inter',sans-serif; font-size:12.5px; color:var(--text);
+  opacity:0; transform:translateY(5px) scale(0.97); transition:opacity .12s ease, transform .12s ease; display:flex; align-items:center;
+  gap:9px; white-space:nowrap;}
+.bar3d-tooltip.show{opacity:1; transform:translateY(0) scale(1);}
+.bar3d-tooltip .bar3d-tooltip-dot{width:9px; height:9px; border-radius:50%; flex-shrink:0; box-shadow:0 0 6px currentColor;}
+.bar3d-tooltip .bar3d-tooltip-name{font-weight:600; color:var(--text); max-width:220px; overflow:hidden; text-overflow:ellipsis;}
+.bar3d-tooltip .bar3d-tooltip-pct{font-family:'JetBrains Mono',monospace; font-weight:700; color:var(--text-dim);}
 
 /* ---- CONTACT INFORMATION (client detail + modal) ---- */
 .contacts-section{margin-top:26px;}
@@ -353,8 +361,8 @@ textarea{font-family:'Inter',sans-serif; resize:vertical; min-height:60px;}
     <div class="form-row" style="display:flex; gap:16px; align-items:flex-start;">
       <div style="flex-shrink:0;">
         <label class="field-label">Logo</label>
-        <div id="clientLogoPreviewWrap" style="width:56px; height:56px; border-radius:8px; background:var(--panel-alt); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; overflow:hidden;">
-          <img id="clientLogoPreview" src="" alt="" class="hidden" style="width:100%; height:100%; object-fit:cover;">
+        <div id="clientLogoPreviewWrap" style="width:56px; height:56px; border-radius:8px; background:var(--panel-alt); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; overflow:hidden; box-sizing:border-box; padding:5px;">
+          <img id="clientLogoPreview" src="" alt="" class="hidden" style="width:100%; height:100%; object-fit:contain;">
           <span id="clientLogoPlaceholder" style="font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--text-dim);">NONE</span>
         </div>
       </div>
@@ -1221,6 +1229,7 @@ function computeCompletionPercent(client){
 }
 function goToClientDetails(clientId){
   if(!clientId) return;
+  hideBar3DTooltip();
   selectedClientId = clientId;
   renderSidebar();
   renderMain();
@@ -1244,6 +1253,46 @@ function completionColor(pct){
   const t = (clamped - lo.p) / range;
   const rgb = lo.c.map((v, i) => Math.round(v + (hi.c[i] - v) * t));
   return `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
+}
+function ensureBar3DTooltip(){
+  let el = document.getElementById('bar3dTooltip');
+  if(!el){
+    el = document.createElement('div');
+    el.id = 'bar3dTooltip';
+    el.className = 'bar3d-tooltip';
+    el.innerHTML = '<span class="bar3d-tooltip-dot"></span><span class="bar3d-tooltip-name"></span><span class="bar3d-tooltip-pct"></span>';
+    document.body.appendChild(el);
+  }
+  return el;
+}
+function showBar3DTooltip(row, evt){
+  const el = ensureBar3DTooltip();
+  const name = row.getAttribute('data-name') || '';
+  const pct = row.getAttribute('data-pct') || '0';
+  const color = completionColor(Number(pct));
+  el.querySelector('.bar3d-tooltip-dot').style.background = color;
+  el.querySelector('.bar3d-tooltip-dot').style.color = color;
+  el.querySelector('.bar3d-tooltip-name').textContent = name;
+  el.querySelector('.bar3d-tooltip-pct').textContent = pct + '% complete';
+  el.querySelector('.bar3d-tooltip-pct').style.color = color;
+  positionBar3DTooltip(evt);
+  el.classList.add('show');
+}
+function positionBar3DTooltip(evt){
+  const el = document.getElementById('bar3dTooltip');
+  if(!el) return;
+  const pad = 16;
+  let x = evt.clientX + pad;
+  let y = evt.clientY + pad;
+  const rect = el.getBoundingClientRect();
+  if(x + rect.width + 8 > window.innerWidth) x = evt.clientX - rect.width - pad;
+  if(y + rect.height + 8 > window.innerHeight) y = evt.clientY - rect.height - pad;
+  el.style.left = x + 'px';
+  el.style.top = y + 'px';
+}
+function hideBar3DTooltip(){
+  const el = document.getElementById('bar3dTooltip');
+  if(el) el.classList.remove('show');
 }
 function chartRenderError(container, message){
   console.error('[Dashboard chart]', message);
@@ -1387,6 +1436,7 @@ function renderDashboard(){
 function renderCompletionChart(){
   const metaEl = document.getElementById('dashCompletionMeta');
   if(!metaEl) return; // dashboard not currently on screen
+  hideBar3DTooltip();
   const q = completionSearchQuery.trim().toLowerCase();
   let list = clients.map(c => ({ id: c.id, name: c.name || 'Untitled client', pct: computeCompletionPercent(c) }));
   if(q) list = list.filter(c => c.name.toLowerCase().includes(q));
@@ -1408,10 +1458,10 @@ function renderCompletionChart(){
     inner.style.height = 'auto';
     if(shown.length === 0){ inner.innerHTML = ''; return; }
     inner.innerHTML = shown.map(c => `
-      <div class="bar3d-row" data-client-id="${c.id}" style="cursor:pointer;" title="${escapeHtml(c.name)} · ${c.pct}% complete">
-        <div class="bar3d-label" title="${escapeHtml(c.name)} · ${c.pct}% complete">${escapeHtml(c.name)}</div>
-        <div class="bar3d-track" title="${escapeHtml(c.name)} · ${c.pct}% complete"><div class="bar3d-fill" data-target-width="${c.pct}" style="background:${completionColor(c.pct)};"></div></div>
-        <div class="bar3d-pct" title="${escapeHtml(c.name)} · ${c.pct}% complete">${c.pct}%</div>
+      <div class="bar3d-row" data-client-id="${c.id}" data-name="${escapeHtml(c.name)}" data-pct="${c.pct}" style="cursor:pointer;" aria-label="${escapeHtml(c.name)} · ${c.pct}% complete">
+        <div class="bar3d-label">${escapeHtml(c.name)}</div>
+        <div class="bar3d-track"><div class="bar3d-fill" data-target-width="${c.pct}" style="background:${completionColor(c.pct)};"></div></div>
+        <div class="bar3d-pct">${c.pct}%</div>
       </div>`).join('');
     // animate bars growing in on next frame for a soft entrance
     requestAnimationFrame(()=>{
@@ -1419,6 +1469,9 @@ function renderCompletionChart(){
     });
     inner.querySelectorAll('.bar3d-row').forEach(row => {
       row.addEventListener('click', () => goToClientDetails(row.getAttribute('data-client-id')));
+      row.addEventListener('pointerenter', (e) => showBar3DTooltip(row, e));
+      row.addEventListener('pointermove', (e) => positionBar3DTooltip(e));
+      row.addEventListener('pointerleave', hideBar3DTooltip);
     });
     return;
   }
@@ -2079,7 +2132,8 @@ function filledCount(client){
 function avatarHtml(client, size){
   const initial = (client.name||'?').trim().charAt(0).toUpperCase() || '?';
   if(client.logoUrl){
-    return `<img src="${escapeHtml(client.logoUrl)}" alt="" style="width:${size}px; height:${size}px; border-radius:6px; object-fit:cover; flex-shrink:0;">`;
+    const pad = Math.max(2, Math.round(size * 0.1));
+    return `<img src="${escapeHtml(client.logoUrl)}" alt="" style="width:${size}px; height:${size}px; border-radius:6px; object-fit:contain; background:var(--panel-alt); border:1px solid var(--border); box-sizing:border-box; padding:${pad}px; flex-shrink:0;">`;
   }
   return `<div style="width:${size}px; height:${size}px; border-radius:6px; background:var(--panel-alt); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; font-family:'JetBrains Mono',monospace; font-size:${Math.round(size*0.4)}px; color:var(--text-dim); flex-shrink:0;">${initial}</div>`;
 }
