@@ -1226,10 +1226,32 @@ function goToClientDetails(clientId){
   renderMain();
 }
 function completionColor(pct){
-  if(pct >= 80) return '#6FCF97';
-  if(pct >= 50) return '#E9B44C';
-  if(pct >= 25) return '#F2A65A';
-  return '#E2725B';
+  // Smooth gradient from red (low completion) through amber to green (full completion)
+  // instead of a few abrupt buckets, so nearby percentages get visibly nearby colors.
+  // Dark mode uses brighter stops that glow against the near-black background; light
+  // mode uses deeper, more saturated stops so the fill stays easy to read on white.
+  const stopsDark = [
+    { p: 0,   c: [242, 131, 107] }, // bright coral-red
+    { p: 50,  c: [255, 168, 87]  }, // bright amber
+    { p: 80,  c: [245, 196, 81]  }, // bright gold
+    { p: 100, c: [126, 226, 168] }  // bright mint green
+  ];
+  const stopsLight = [
+    { p: 0,   c: [192, 80, 59]   }, // deep red
+    { p: 50,  c: [178, 91, 18]   }, // deep amber
+    { p: 80,  c: [181, 121, 10]  }, // deep gold
+    { p: 100, c: [24, 138, 85]   }  // deep green
+  ];
+  const stops = currentTheme === 'light' ? stopsLight : stopsDark;
+  const clamped = Math.max(0, Math.min(100, pct));
+  let lo = stops[0], hi = stops[stops.length - 1];
+  for(let i = 0; i < stops.length - 1; i++){
+    if(clamped >= stops[i].p && clamped <= stops[i+1].p){ lo = stops[i]; hi = stops[i+1]; break; }
+  }
+  const range = hi.p - lo.p || 1;
+  const t = (clamped - lo.p) / range;
+  const rgb = lo.c.map((v, i) => Math.round(v + (hi.c[i] - v) * t));
+  return `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
 }
 function chartRenderError(container, message){
   console.error('[Dashboard chart]', message);
@@ -1462,7 +1484,12 @@ function renderMainChart(counts) {
   const labels = APP_TYPES;
   const data = APP_TYPES.map(t => counts[t]);
   const total = data.reduce((s,v)=>s+v,0);
-  const colors = ['#E9B44C', '#5FA8D3', '#6FCF97', '#E2725B', '#F0AD4E', '#9B59B6', '#3498DB', '#1ABC9C', '#E74C3C', '#95A5A6'];
+  // Two palettes tuned per theme: dark mode gets vivid, glowing colors that pop against
+  // the near-black background; light mode gets deeper, more saturated colors so they
+  // stay readable against the white/pale panels instead of washing out.
+  const DARK_PALETTE  = ['#6FC3F0', '#F5C451', '#7EE2A8', '#F2836B', '#C79CF7', '#5FE0D0', '#FFA857', '#F582BE', '#9FB0CC', '#D8DB63'];
+  const LIGHT_PALETTE = ['#1B6FA8', '#B5790A', '#188A55', '#C0503B', '#6B3FA0', '#0E8A80', '#B25B12', '#B23372', '#4A5568', '#7A7D12'];
+  const colors = currentTheme === 'light' ? LIGHT_PALETTE : DARK_PALETTE;
 
   if(dashboardCharts.main){ try{ dashboardCharts.main.destroy(); }catch(e){} dashboardCharts.main = null; }
   if(dashboard3D.main){ try{ dashboard3D.main.dispose(); }catch(e){} dashboard3D.main = null; }
@@ -1509,9 +1536,12 @@ function renderMainChart(counts) {
         datasets: [{
           label: 'Clients',
           data: data,
-          backgroundColor: isBar ? 'rgba(233, 180, 76, 0.7)' : colors,
-          borderColor: isBar ? 'rgba(233, 180, 76, 1)' : 'rgba(22, 25, 32, 1)',
-          borderWidth: 1
+          backgroundColor: isBar ? colors.map(c => c + 'CC') : colors,
+          hoverBackgroundColor: colors,
+          borderColor: isBar ? colors : 'rgba(22, 25, 32, 1)',
+          borderWidth: isBar ? 1.5 : 1,
+          borderRadius: isBar ? 6 : 0,
+          hoverBorderColor: isBar ? colors : undefined
         }]
       },
       options: {
