@@ -157,15 +157,25 @@ textarea{font-family:'Inter',sans-serif; resize:vertical; min-height:60px;}
 .dashboard-card .big-number{font-family:'JetBrains Mono',monospace; font-size:48px; font-weight:700; color:var(--accent); margin:0; line-height:1;}
 .dashboard-card .sub-text{font-size:12px; color:var(--text-muted); margin-top:12px;}
 
-.chart-grid{display:grid; grid-template-columns:repeat(auto-fit, minmax(400px,1fr)); gap:20px;}
-.chart-container{background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:20px;}
-.chart-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;}
+.chart-grid{display:grid; grid-template-columns:repeat(auto-fit, minmax(520px,1fr)); gap:20px;}
+.chart-container{background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:20px; min-width:0;}
+.chart-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; gap:12px; flex-wrap:wrap;}
 .chart-head h3{font-family:'JetBrains Mono',monospace; font-size:12px; letter-spacing:1px; text-transform:uppercase; color:var(--text-dim); margin:0;}
-.chart-type-toggle{display:flex; background:var(--panel-alt); border-radius:6px; padding:2px;}
-.chart-type-btn{background:none; border:none; color:var(--text-dim); padding:4px 8px; font-size:11px; cursor:pointer; border-radius:4px; transition:all .2s;}
-.chart-type-btn.active{background:var(--border); color:var(--text);}
+.chart-head-controls{display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
+.chart-type-toggle, .chart-value-toggle{display:flex; background:var(--panel-alt); border-radius:6px; padding:2px;}
+.chart-type-btn, .chart-value-btn{background:none; border:none; color:var(--text-dim); padding:4px 8px; font-size:11px; cursor:pointer; border-radius:4px; transition:all .2s; font-family:'Inter',sans-serif;}
+.chart-type-btn.active, .chart-value-btn.active{background:var(--border); color:var(--text);}
+.chart-download-btn{display:flex; align-items:center; gap:5px; background:var(--panel-alt); border:1px solid var(--border); color:var(--text-muted); padding:5px 10px; font-size:11px; cursor:pointer; border-radius:6px; font-family:'Inter',sans-serif; transition:all .15s;}
+.chart-download-btn:hover{color:var(--accent); border-color:var(--accent);}
 
-.chart-wrapper{position:relative; height:320px;}
+.chart-wrapper{position:relative; height:min(60vh, 480px); min-height:360px; width:100%;}
+.chart-hint{font-size:11px; color:var(--text-dim); margin-top:10px; text-align:center;}
+.chart-client-list{margin-top:16px; border-top:1px solid var(--border-soft); padding-top:14px;}
+.chart-client-list-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; font-size:12.5px; color:var(--text-muted);}
+.chart-client-list-head strong{color:var(--text);}
+.chart-client-list-body{display:flex; flex-wrap:wrap; gap:8px;}
+.chart-client-chip{background:var(--panel-alt); border:1px solid var(--border); color:var(--text); padding:6px 12px; border-radius:20px; font-size:12px; cursor:pointer; transition:all .15s;}
+.chart-client-chip:hover{border-color:var(--accent); color:var(--accent);}
 
 /* ---- 2D / 3D DIMENSION TOGGLE ---- */
 .chart-dimension-toggle{display:flex; align-items:center; gap:2px; background:var(--panel-alt); border:1px solid var(--border); border-radius:20px; padding:3px; position:relative; width:104px; flex-shrink:0;}
@@ -176,7 +186,7 @@ textarea{font-family:'Inter',sans-serif; resize:vertical; min-height:60px;}
 .dim-btn:hover:not(.active){color:var(--text);}
 
 /* ---- 3D CHART CONTAINERS ---- */
-.chart-3d-wrapper{position:relative; height:320px; border-radius:10px; overflow:hidden; cursor:grab;
+.chart-3d-wrapper{position:relative; height:min(60vh, 480px); min-height:360px; border-radius:10px; overflow:hidden; cursor:grab;
   background:
     radial-gradient(circle at 25% 15%, rgba(95,168,211,0.14), transparent 45%),
     radial-gradient(circle at 78% 85%, rgba(233,180,76,0.14), transparent 45%),
@@ -1171,6 +1181,8 @@ function setChartDimension(dim){
 }
 let selectedAppFilter = 'all';
 let completionSearchQuery = '';
+let chartValueMode = 'count'; // 'count' or 'percent' — applies to pie/doughnut labels & tooltips
+let selectedChartAppType = null; // app type selected via chart click, for the client list below the chart
 
 function computeCompletionPercent(client){
   let total = 0, filled = 0;
@@ -1244,19 +1256,32 @@ function renderDashboard(){
       <div class="chart-container">
         <div class="chart-head">
           <h3>Application Distribution</h3>
-          <div class="chart-type-toggle">
-            <button class="chart-type-btn ${currentChartType==='bar'?'active':''}" data-type="bar">Bar</button>
-            <button class="chart-type-btn ${currentChartType==='pie'?'active':''}" data-type="pie">Pie</button>
-            <button class="chart-type-btn ${currentChartType==='doughnut'?'active':''}" data-type="doughnut">Doughnut</button>
+          <div class="chart-head-controls">
+            <div class="chart-type-toggle">
+              <button class="chart-type-btn ${currentChartType==='bar'?'active':''}" data-type="bar">Bar</button>
+              <button class="chart-type-btn ${currentChartType==='pie'?'active':''}" data-type="pie">Pie</button>
+              <button class="chart-type-btn ${currentChartType==='doughnut'?'active':''}" data-type="doughnut">Doughnut</button>
+            </div>
+            ${currentChartType !== 'bar' ? `
+            <div class="chart-value-toggle" title="Show values as percentage or count">
+              <button class="chart-value-btn ${chartValueMode==='count'?'active':''}" data-value-mode="count">Values</button>
+              <button class="chart-value-btn ${chartValueMode==='percent'?'active':''}" data-value-mode="percent">%</button>
+            </div>` : ''}
+            <button class="chart-download-btn" id="downloadMainChartBtn" title="Download chart as image">⬇ Download</button>
           </div>
         </div>
         <div class="${chartDimension==='3d'?'chart-3d-wrapper':'chart-wrapper'}" id="mainDashboardChartWrap"></div>
+        ${chartDimension==='2d' ? `<div class="chart-hint">Click a ${currentChartType==='bar'?'bar':'slice'} to see which clients have that application</div>` : ''}
+        <div class="chart-client-list" id="mainChartClientList"></div>
       </div>
     </div>
 
     <div class="chart-container" style="margin-top:20px;">
       <div class="chart-head">
         <h3>Data completion by client</h3>
+        <div class="chart-head-controls">
+          <button class="chart-download-btn" id="downloadCompletionChartBtn" title="Download chart as image">⬇ Download</button>
+        </div>
       </div>
       <input type="text" id="dashCompletionSearch" placeholder="Filter by client name…" value="${escapeHtml(completionSearchQuery)}"
         style="width:100%; margin-bottom:12px; background:var(--panel-alt); border:1px solid var(--border); border-radius:6px; color:var(--text); padding:10px 12px; font-family:'Inter',sans-serif; font-size:13px; outline:none; box-sizing:border-box;">
@@ -1276,9 +1301,22 @@ function renderDashboard(){
   document.querySelectorAll('.chart-type-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       currentChartType = btn.getAttribute('data-type');
+      selectedChartAppType = null;
       renderDashboard();
     });
   });
+
+  document.querySelectorAll('.chart-value-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      chartValueMode = btn.getAttribute('data-value-mode');
+      renderDashboard();
+    });
+  });
+
+  const downloadMainBtn = document.getElementById('downloadMainChartBtn');
+  if(downloadMainBtn){
+    downloadMainBtn.addEventListener('click', () => downloadChartImage('main', 'application-distribution'));
+  }
 
   document.querySelectorAll('#chartDimToggle .dim-btn').forEach(btn => {
     btn.addEventListener('click', () => setChartDimension(btn.getAttribute('data-dim')));
@@ -1289,8 +1327,14 @@ function renderDashboard(){
     renderCompletionChart();
   });
 
+  const downloadCompletionBtn = document.getElementById('downloadCompletionChartBtn');
+  if(downloadCompletionBtn){
+    downloadCompletionBtn.addEventListener('click', () => downloadChartImage('completion', 'data-completion-by-client'));
+  }
+
   renderMainChart(counts);
   renderCompletionChart();
+  showClientsForAppType(selectedChartAppType);
   renderSidebar();
 }
 
@@ -1346,8 +1390,14 @@ function renderCompletionChart(){
       indexAxis: 'y', responsive: true, maintainAspectRatio: false,
       plugins: { legend: { display:false }, tooltip: { callbacks: { label: (ctx) => ctx.parsed.x + '% complete' } } },
       scales: {
-        x: { min:0, max:100, ticks: { color:chartTextColor(), callback:(v)=>v+'%' }, grid: { color:chartGridColor() } },
-        y: { ticks: { color:chartTextColor(), font:{size:10.5} }, grid: { display:false } }
+        x: {
+          min:0, max:100, ticks: { color:chartTextColor(), callback:(v)=>v+'%' }, grid: { color:chartGridColor() },
+          title: { display:true, text:'Completion (%)', color:chartTextColorStrong(), font:{ size:12, weight:'600' } }
+        },
+        y: {
+          ticks: { color:chartTextColor(), font:{size:10.5} }, grid: { display:false },
+          title: { display:true, text:'Client', color:chartTextColorStrong(), font:{ size:12, weight:'600' } }
+        }
       }
     }
   });
@@ -1358,6 +1408,7 @@ function renderMainChart(counts) {
   if(!wrap) return;
   const labels = APP_TYPES;
   const data = APP_TYPES.map(t => counts[t]);
+  const total = data.reduce((s,v)=>s+v,0);
   const colors = ['#E9B44C', '#5FA8D3', '#6FCF97', '#E2725B', '#F0AD4E', '#9B59B6', '#3498DB', '#1ABC9C', '#E74C3C', '#95A5A6'];
 
   if(dashboardCharts.main){ dashboardCharts.main.destroy(); dashboardCharts.main = null; }
@@ -1373,6 +1424,13 @@ function renderMainChart(counts) {
   wrap.className = 'chart-wrapper';
   wrap.innerHTML = '<canvas id="mainDashboardChart"></canvas>';
   const ctx = document.getElementById('mainDashboardChart').getContext('2d');
+  const isBar = currentChartType === 'bar';
+
+  // For pie/doughnut, let the user choose whether labels/tooltips show raw counts or percentages
+  const valueLabel = (val) => {
+    if(isBar || chartValueMode === 'count') return String(val);
+    return total ? Math.round((val/total)*100) + '%' : '0%';
+  };
 
   dashboardCharts.main = new Chart(ctx, {
     type: currentChartType,
@@ -1381,34 +1439,101 @@ function renderMainChart(counts) {
       datasets: [{
         label: 'Clients',
         data: data,
-        backgroundColor: currentChartType === 'bar' ? 'rgba(233, 180, 76, 0.7)' : colors,
-        borderColor: currentChartType === 'bar' ? 'rgba(233, 180, 76, 1)' : 'rgba(22, 25, 32, 1)',
+        backgroundColor: isBar ? 'rgba(233, 180, 76, 0.7)' : colors,
+        borderColor: isBar ? 'rgba(233, 180, 76, 1)' : 'rgba(22, 25, 32, 1)',
         borderWidth: 1
       }]
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      plugins: { 
-        legend: { 
-          display: currentChartType !== 'bar',
-          position: 'bottom',
-          labels: { color: chartTextColorStrong(), boxWidth: 12, font: { size: 11 } }
-        } 
+      onClick: (evt, elements) => {
+        if(!elements || !elements.length) return;
+        const idx = elements[0].index;
+        const appType = labels[idx];
+        selectedChartAppType = (selectedChartAppType === appType) ? null : appType;
+        showClientsForAppType(selectedChartAppType);
       },
-      scales: currentChartType === 'bar' ? {
-        y: { 
-          beginAtZero: true, 
-          ticks: { color: chartTextColor(), stepSize: 1, precision: 0 }, 
-          grid: { color: chartGridColor() } 
+      onHover: (evt, elements) => {
+        evt.native.target.style.cursor = elements.length ? 'pointer' : 'default';
+      },
+      plugins: {
+        legend: {
+          display: !isBar,
+          position: 'bottom',
+          labels: {
+            color: chartTextColorStrong(), boxWidth: 12, font: { size: 11 },
+            generateLabels: (chart) => {
+              const base = Chart.overrides[chart.config.type].plugins.legend.labels.generateLabels(chart);
+              base.forEach((item, i) => { item.text = `${labels[i]}: ${valueLabel(data[i])}`; });
+              return base;
+            }
+          }
         },
-        x: { 
-          ticks: { color: chartTextColor() }, 
-          grid: { display: false } 
+        tooltip: {
+          callbacks: {
+            label: (ctx) => `${ctx.label}: ${valueLabel(ctx.parsed.y !== undefined ? ctx.parsed.y : ctx.parsed)}`
+          }
+        }
+      },
+      scales: isBar ? {
+        y: {
+          beginAtZero: true,
+          ticks: { color: chartTextColor(), stepSize: 1, precision: 0 },
+          grid: { color: chartGridColor() },
+          title: { display: true, text: 'Number of Clients', color: chartTextColorStrong(), font: { size: 12, weight: '600' } }
+        },
+        x: {
+          ticks: { color: chartTextColor() },
+          grid: { display: false },
+          title: { display: true, text: 'Application Type', color: chartTextColorStrong(), font: { size: 12, weight: '600' } }
         }
       } : {}
     }
   });
+}
+
+/* ---------------- CHART CLIENT LIST (click a bar/slice to see who has it) ---------------- */
+function showClientsForAppType(appType){
+  const listEl = document.getElementById('mainChartClientList');
+  if(!listEl) return;
+  if(!appType){ listEl.innerHTML = ''; return; }
+  const matching = clients.filter(c => (c.applicationTypes||[]).includes(appType));
+  listEl.innerHTML = `
+    <div class="chart-client-list-head">
+      <span>Clients with <strong>${escapeHtml(appType)}</strong> (${matching.length})</span>
+      <button class="icon-btn" id="clearChartClientListBtn">✕ Clear</button>
+    </div>
+    <div class="chart-client-list-body">
+      ${matching.length ? matching.map(c => `<div class="chart-client-chip" data-client-id="${c.id}">${escapeHtml(c.name || 'Untitled client')}</div>`).join('') : '<div class="contacts-empty">No clients have this application.</div>'}
+    </div>`;
+  const clearBtn = document.getElementById('clearChartClientListBtn');
+  if(clearBtn) clearBtn.addEventListener('click', () => { selectedChartAppType = null; listEl.innerHTML = ''; });
+  listEl.querySelectorAll('.chart-client-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      selectedClientId = chip.getAttribute('data-client-id');
+      renderSidebar();
+      renderMain();
+    });
+  });
+}
+
+/* ---------------- CHART DOWNLOAD (export canvas as PNG) ---------------- */
+function downloadChartImage(chartKey, filenameBase){
+  const chart = dashboardCharts[chartKey];
+  if(!chart){ showToast('Switch to 2D view to download this chart.'); return; }
+  const bg = currentTheme === 'light' ? '#FFFFFF' : '#161920';
+  const src = chart.canvas;
+  const tmp = document.createElement('canvas');
+  tmp.width = src.width; tmp.height = src.height;
+  const tctx = tmp.getContext('2d');
+  tctx.fillStyle = bg;
+  tctx.fillRect(0, 0, tmp.width, tmp.height);
+  tctx.drawImage(src, 0, 0);
+  const link = document.createElement('a');
+  link.download = `${filenameBase}-${new Date().toISOString().slice(0,10)}.png`;
+  link.href = tmp.toDataURL('image/png');
+  link.click();
 }
 
 /* ---------------- 3D CHART ENGINE (three.js) ---------------- */
