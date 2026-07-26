@@ -1513,9 +1513,18 @@ function renderMainChart(counts) {
             labels: {
               color: chartTextColorStrong(), boxWidth: 12, font: { size: 11 },
               generateLabels: (chart) => {
-                const base = Chart.overrides[chart.config.type].plugins.legend.labels.generateLabels(chart);
-                base.forEach((item, i) => { item.text = `${labels[i]}: ${valueLabel(data[i])}`; });
-                return base;
+                try {
+                  const typeOverride = Chart.overrides && Chart.overrides[chart.config.type];
+                  const baseFn = (typeOverride && typeOverride.plugins && typeOverride.plugins.legend && typeOverride.plugins.legend.labels && typeOverride.plugins.legend.labels.generateLabels)
+                    || (Chart.defaults && Chart.defaults.plugins && Chart.defaults.plugins.legend && Chart.defaults.plugins.legend.labels && Chart.defaults.plugins.legend.labels.generateLabels);
+                  if(!baseFn) return [];
+                  const base = baseFn(chart);
+                  base.forEach((item, i) => { if(labels[i] !== undefined) item.text = `${labels[i]}: ${valueLabel(data[i])}`; });
+                  return base;
+                } catch(e) {
+                  console.warn('[Dashboard chart] legend label generation failed, using default labels', e);
+                  return [];
+                }
               }
             }
           },
