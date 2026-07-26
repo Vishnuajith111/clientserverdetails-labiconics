@@ -5,6 +5,7 @@
 <title>Client Server Vault</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap');
 
@@ -156,15 +157,61 @@ textarea{font-family:'Inter',sans-serif; resize:vertical; min-height:60px;}
 .dashboard-card .big-number{font-family:'JetBrains Mono',monospace; font-size:48px; font-weight:700; color:var(--accent); margin:0; line-height:1;}
 .dashboard-card .sub-text{font-size:12px; color:var(--text-muted); margin-top:12px;}
 
-.chart-grid{display:grid; grid-template-columns:repeat(auto-fit, minmax(400px,1fr)); gap:20px;}
-.chart-container{background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:20px;}
-.chart-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;}
+.chart-grid{display:grid; grid-template-columns:repeat(auto-fit, minmax(520px,1fr)); gap:20px;}
+.chart-container{background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:20px; min-width:0;}
+.chart-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; gap:12px; flex-wrap:wrap;}
 .chart-head h3{font-family:'JetBrains Mono',monospace; font-size:12px; letter-spacing:1px; text-transform:uppercase; color:var(--text-dim); margin:0;}
-.chart-type-toggle{display:flex; background:var(--panel-alt); border-radius:6px; padding:2px;}
-.chart-type-btn{background:none; border:none; color:var(--text-dim); padding:4px 8px; font-size:11px; cursor:pointer; border-radius:4px; transition:all .2s;}
-.chart-type-btn.active{background:var(--border); color:var(--text);}
+.chart-head-controls{display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
+.chart-type-toggle, .chart-value-toggle{display:flex; background:var(--panel-alt); border-radius:6px; padding:2px;}
+.chart-type-btn, .chart-value-btn{background:none; border:none; color:var(--text-dim); padding:4px 8px; font-size:11px; cursor:pointer; border-radius:4px; transition:all .2s; font-family:'Inter',sans-serif;}
+.chart-type-btn.active, .chart-value-btn.active{background:var(--border); color:var(--text);}
+.chart-download-btn{display:flex; align-items:center; gap:5px; background:var(--panel-alt); border:1px solid var(--border); color:var(--text-muted); padding:5px 10px; font-size:11px; cursor:pointer; border-radius:6px; font-family:'Inter',sans-serif; transition:all .15s;}
+.chart-download-btn:hover{color:var(--accent); border-color:var(--accent);}
 
-.chart-wrapper{position:relative; height:320px;}
+.chart-wrapper{position:relative; height:min(60vh, 480px); min-height:360px; width:100%;}
+.chart-hint{font-size:11px; color:var(--text-dim); margin-top:10px; text-align:center;}
+.chart-client-list{margin-top:16px; border-top:1px solid var(--border-soft); padding-top:14px;}
+.chart-client-list-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; font-size:12.5px; color:var(--text-muted);}
+.chart-client-list-head strong{color:var(--text);}
+.chart-client-list-body{display:flex; flex-wrap:wrap; gap:8px;}
+.chart-client-chip{background:var(--panel-alt); border:1px solid var(--border); color:var(--text); padding:6px 12px; border-radius:20px; font-size:12px; cursor:pointer; transition:all .15s;}
+.chart-client-chip:hover{border-color:var(--accent); color:var(--accent);}
+
+/* ---- 2D / 3D DIMENSION TOGGLE ---- */
+.chart-dimension-toggle{display:flex; align-items:center; gap:2px; background:var(--panel-alt); border:1px solid var(--border); border-radius:20px; padding:3px; position:relative; width:104px; flex-shrink:0;}
+.dim-slider{position:absolute; top:3px; left:3px; width:calc(50% - 3px); height:calc(100% - 6px); background:linear-gradient(135deg, var(--accent), #F5CE7E 65%, #F0AD4E); border-radius:16px; transition:transform .32s cubic-bezier(.4,0,.2,1); box-shadow:0 2px 10px rgba(233,180,76,0.45), inset 0 1px 0 rgba(255,255,255,0.3); z-index:0;}
+.dim-slider.pos-3d{transform:translateX(100%);}
+.dim-btn{flex:1; border:none; background:none; color:var(--text-dim); font-family:'JetBrains Mono',monospace; font-size:11px; font-weight:700; letter-spacing:0.5px; padding:6px 0; border-radius:16px; cursor:pointer; position:relative; z-index:1; transition:color .25s;}
+.dim-btn.active{color:#20160A;}
+.dim-btn:hover:not(.active){color:var(--text);}
+
+/* ---- 3D CHART CONTAINERS ---- */
+.chart-3d-wrapper{position:relative; height:min(60vh, 480px); min-height:360px; border-radius:10px; overflow:hidden; cursor:grab;
+  background:
+    radial-gradient(circle at 25% 15%, rgba(95,168,211,0.14), transparent 45%),
+    radial-gradient(circle at 78% 85%, rgba(233,180,76,0.14), transparent 45%),
+    radial-gradient(circle at 50% 50%, rgba(111,207,151,0.06), transparent 60%),
+    var(--panel-alt);
+  animation:glow-shift 12s ease-in-out infinite alternate;
+}
+.chart-3d-wrapper:active{cursor:grabbing;}
+.chart-3d-wrapper canvas{display:block; width:100%; height:100%;}
+@keyframes glow-shift{
+  0%{background-position:0% 0%, 0% 0%, 0% 0%, 0% 0%;}
+  100%{background-position:6% 4%, -6% -4%, 3% -3%, 0% 0%;}
+}
+.chart-3d-hint{position:absolute; bottom:9px; right:13px; font-family:'JetBrains Mono',monospace; font-size:9.5px; color:var(--text-dim); opacity:0.55; pointer-events:none; letter-spacing:0.5px; display:flex; align-items:center; gap:5px;}
+.chart-3d-hint::before{content:'⟲'; font-size:12px;}
+.chart-3d-loading{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:var(--text-dim); font-family:'JetBrains Mono',monospace; font-size:11px;}
+
+/* ---- 3D-STYLE COMPLETION BARS (used in 3D mode for the per-client list) ---- */
+.bar3d-row{display:flex; align-items:center; gap:10px; height:24px; margin-bottom:4px;}
+.bar3d-label{width:130px; flex-shrink:0; font-size:10.5px; color:var(--text-dim); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-family:'JetBrains Mono',monospace;}
+.bar3d-track{flex:1; position:relative; height:16px; background:var(--panel-alt); border-radius:4px 8px 8px 4px; box-shadow:inset 0 1px 3px rgba(0,0,0,0.25);}
+.bar3d-fill{position:relative; height:100%; border-radius:4px 8px 8px 4px; width:0%; transition:width .6s cubic-bezier(.4,0,.2,1); box-shadow:0 2px 6px rgba(0,0,0,0.25);}
+.bar3d-fill::after{content:''; position:absolute; top:0; left:0; right:0; height:45%; background:linear-gradient(rgba(255,255,255,0.4), transparent); border-radius:4px 8px 0 0;}
+.bar3d-fill::before{content:''; position:absolute; right:-7px; top:0; bottom:0; width:9px; background:inherit; filter:brightness(0.65); transform:skewY(28deg); border-radius:0 3px 3px 0; transform-origin:left;}
+.bar3d-pct{font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--text-dim); width:38px; text-align:right; flex-shrink:0;}
 
 /* ---- CONTACT INFORMATION (client detail + modal) ---- */
 .contacts-section{margin-top:26px;}
@@ -1122,9 +1169,20 @@ document.getElementById('brandingLogoInput').addEventListener('change', async (e
 
 /* -------- DASHBOARD WITH CHARTS -------- */
 let dashboardCharts = {};
+let dashboard3D = {};
 let currentChartType = 'bar';
+let chartDimension = '2d';
+try{ const savedDim = localStorage.getItem('csv_chart_dim'); if(savedDim === '2d' || savedDim === '3d') chartDimension = savedDim; }catch(e){ /* localStorage unavailable */ }
+function setChartDimension(dim){
+  if(dim === chartDimension) return;
+  chartDimension = dim;
+  try{ localStorage.setItem('csv_chart_dim', dim); }catch(e){ /* non-fatal */ }
+  renderDashboard();
+}
 let selectedAppFilter = 'all';
 let completionSearchQuery = '';
+let chartValueMode = 'count'; // 'count' or 'percent' — applies to pie/doughnut labels & tooltips
+let selectedChartAppType = null; // app type selected via chart click, for the client list below the chart
 
 function computeCompletionPercent(client){
   let total = 0, filled = 0;
@@ -1168,6 +1226,11 @@ function renderDashboard(){
     <div class="dashboard-header">
       <h2 class="dashboard-title">System Overview</h2>
       <div class="dashboard-controls">
+        <div class="chart-dimension-toggle" id="chartDimToggle" title="Switch chart rendering mode">
+          <div class="dim-slider ${chartDimension==='3d'?'pos-3d':''}"></div>
+          <button class="dim-btn ${chartDimension==='2d'?'active':''}" data-dim="2d" type="button">2D</button>
+          <button class="dim-btn ${chartDimension==='3d'?'active':''}" data-dim="3d" type="button">3D</button>
+        </div>
         <span style="font-size:12px; color:var(--text-dim);">Filter Application:</span>
         <select class="dash-select" id="dashAppFilter">
           <option value="all">All Applications</option>
@@ -1193,25 +1256,38 @@ function renderDashboard(){
       <div class="chart-container">
         <div class="chart-head">
           <h3>Application Distribution</h3>
-          <div class="chart-type-toggle">
-            <button class="chart-type-btn ${currentChartType==='bar'?'active':''}" data-type="bar">Bar</button>
-            <button class="chart-type-btn ${currentChartType==='pie'?'active':''}" data-type="pie">Pie</button>
-            <button class="chart-type-btn ${currentChartType==='doughnut'?'active':''}" data-type="doughnut">Doughnut</button>
+          <div class="chart-head-controls">
+            <div class="chart-type-toggle">
+              <button class="chart-type-btn ${currentChartType==='bar'?'active':''}" data-type="bar">Bar</button>
+              <button class="chart-type-btn ${currentChartType==='pie'?'active':''}" data-type="pie">Pie</button>
+              <button class="chart-type-btn ${currentChartType==='doughnut'?'active':''}" data-type="doughnut">Doughnut</button>
+            </div>
+            ${currentChartType !== 'bar' ? `
+            <div class="chart-value-toggle" title="Show values as percentage or count">
+              <button class="chart-value-btn ${chartValueMode==='count'?'active':''}" data-value-mode="count">Values</button>
+              <button class="chart-value-btn ${chartValueMode==='percent'?'active':''}" data-value-mode="percent">%</button>
+            </div>` : ''}
+            <button class="chart-download-btn" id="downloadMainChartBtn" title="Download chart as image">⬇ Download</button>
           </div>
         </div>
-        <div class="chart-wrapper"><canvas id="mainDashboardChart"></canvas></div>
+        <div class="${chartDimension==='3d'?'chart-3d-wrapper':'chart-wrapper'}" id="mainDashboardChartWrap"></div>
+        ${chartDimension==='2d' ? `<div class="chart-hint">Click a ${currentChartType==='bar'?'bar':'slice'} to see which clients have that application</div>` : ''}
+        <div class="chart-client-list" id="mainChartClientList"></div>
       </div>
     </div>
 
     <div class="chart-container" style="margin-top:20px;">
       <div class="chart-head">
         <h3>Data completion by client</h3>
+        <div class="chart-head-controls">
+          <button class="chart-download-btn" id="downloadCompletionChartBtn" title="Download chart as image">⬇ Download</button>
+        </div>
       </div>
       <input type="text" id="dashCompletionSearch" placeholder="Filter by client name…" value="${escapeHtml(completionSearchQuery)}"
         style="width:100%; margin-bottom:12px; background:var(--panel-alt); border:1px solid var(--border); border-radius:6px; color:var(--text); padding:10px 12px; font-family:'Inter',sans-serif; font-size:13px; outline:none; box-sizing:border-box;">
       <div id="dashCompletionMeta" style="font-size:11.5px; color:var(--text-dim); margin-bottom:10px;"></div>
       <div id="dashCompletionChartWrap" style="max-height:480px; overflow-y:auto; border:1px solid var(--border); border-radius:8px; padding:8px;">
-        <div id="dashCompletionChartInner" style="position:relative;"><canvas id="dashCompletionChart"></canvas></div>
+        <div id="dashCompletionChartInner" style="position:relative;"></div>
       </div>
     </div>
   `;
@@ -1225,8 +1301,25 @@ function renderDashboard(){
   document.querySelectorAll('.chart-type-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       currentChartType = btn.getAttribute('data-type');
+      selectedChartAppType = null;
       renderDashboard();
     });
+  });
+
+  document.querySelectorAll('.chart-value-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      chartValueMode = btn.getAttribute('data-value-mode');
+      renderDashboard();
+    });
+  });
+
+  const downloadMainBtn = document.getElementById('downloadMainChartBtn');
+  if(downloadMainBtn){
+    downloadMainBtn.addEventListener('click', () => downloadChartImage('main', 'application-distribution'));
+  }
+
+  document.querySelectorAll('#chartDimToggle .dim-btn').forEach(btn => {
+    btn.addEventListener('click', () => setChartDimension(btn.getAttribute('data-dim')));
   });
 
   document.getElementById('dashCompletionSearch').addEventListener('input', (e)=>{
@@ -1234,8 +1327,14 @@ function renderDashboard(){
     renderCompletionChart();
   });
 
+  const downloadCompletionBtn = document.getElementById('downloadCompletionChartBtn');
+  if(downloadCompletionBtn){
+    downloadCompletionBtn.addEventListener('click', () => downloadChartImage('completion', 'data-completion-by-client'));
+  }
+
   renderMainChart(counts);
   renderCompletionChart();
+  showClientsForAppType(selectedChartAppType);
   renderSidebar();
 }
 
@@ -1254,10 +1353,30 @@ function renderCompletionChart(){
     : `Showing ${shown.length} of ${list.length} matching client${list.length===1?'':'s'}${list.length>CAP ? ' — refine your search to narrow further' : ''}.`;
 
   const inner = document.getElementById('dashCompletionChartInner');
-  const barHeight = 22;
-  inner.style.height = Math.max(160, shown.length * barHeight) + 'px';
 
   if(dashboardCharts.completion){ dashboardCharts.completion.destroy(); dashboardCharts.completion = null; }
+
+  if(chartDimension === '3d'){
+    // Stylized extruded 3D-look bars — kept as crisp DOM elements (not a WebGL scene)
+    // because this list can hold dozens of rows and needs to stay readable & scrollable.
+    inner.style.height = 'auto';
+    if(shown.length === 0){ inner.innerHTML = ''; return; }
+    inner.innerHTML = shown.map(c => `
+      <div class="bar3d-row">
+        <div class="bar3d-label" title="${escapeHtml(c.name)}">${escapeHtml(c.name)}</div>
+        <div class="bar3d-track"><div class="bar3d-fill" data-target-width="${c.pct}" style="background:${completionColor(c.pct)};"></div></div>
+        <div class="bar3d-pct">${c.pct}%</div>
+      </div>`).join('');
+    // animate bars growing in on next frame for a soft entrance
+    requestAnimationFrame(()=>{
+      inner.querySelectorAll('.bar3d-fill').forEach(el=>{ el.style.width = el.getAttribute('data-target-width') + '%'; });
+    });
+    return;
+  }
+
+  const barHeight = 22;
+  inner.style.height = Math.max(160, shown.length * barHeight) + 'px';
+  inner.innerHTML = '<canvas id="dashCompletionChart"></canvas>';
   if(shown.length === 0) return;
 
   const ctx = document.getElementById('dashCompletionChart').getContext('2d');
@@ -1271,21 +1390,47 @@ function renderCompletionChart(){
       indexAxis: 'y', responsive: true, maintainAspectRatio: false,
       plugins: { legend: { display:false }, tooltip: { callbacks: { label: (ctx) => ctx.parsed.x + '% complete' } } },
       scales: {
-        x: { min:0, max:100, ticks: { color:chartTextColor(), callback:(v)=>v+'%' }, grid: { color:chartGridColor() } },
-        y: { ticks: { color:chartTextColor(), font:{size:10.5} }, grid: { display:false } }
+        x: {
+          min:0, max:100, ticks: { color:chartTextColor(), callback:(v)=>v+'%' }, grid: { color:chartGridColor() },
+          title: { display:true, text:'Completion (%)', color:chartTextColorStrong(), font:{ size:12, weight:'600' } }
+        },
+        y: {
+          ticks: { color:chartTextColor(), font:{size:10.5} }, grid: { display:false },
+          title: { display:true, text:'Client', color:chartTextColorStrong(), font:{ size:12, weight:'600' } }
+        }
       }
     }
   });
 }
 
 function renderMainChart(counts) {
-  const ctx = document.getElementById('mainDashboardChart').getContext('2d');
+  const wrap = document.getElementById('mainDashboardChartWrap');
+  if(!wrap) return;
   const labels = APP_TYPES;
   const data = APP_TYPES.map(t => counts[t]);
-  
-  if(dashboardCharts.main) dashboardCharts.main.destroy();
-  
+  const total = data.reduce((s,v)=>s+v,0);
   const colors = ['#E9B44C', '#5FA8D3', '#6FCF97', '#E2725B', '#F0AD4E', '#9B59B6', '#3498DB', '#1ABC9C', '#E74C3C', '#95A5A6'];
+
+  if(dashboardCharts.main){ dashboardCharts.main.destroy(); dashboardCharts.main = null; }
+  if(dashboard3D.main){ dashboard3D.main.dispose(); dashboard3D.main = null; }
+
+  if(chartDimension === '3d'){
+    wrap.className = 'chart-3d-wrapper';
+    wrap.innerHTML = '<div class="chart-3d-hint">drag to rotate</div>';
+    dashboard3D.main = create3DChart(wrap, { type: currentChartType, labels, data, colors });
+    return;
+  }
+
+  wrap.className = 'chart-wrapper';
+  wrap.innerHTML = '<canvas id="mainDashboardChart"></canvas>';
+  const ctx = document.getElementById('mainDashboardChart').getContext('2d');
+  const isBar = currentChartType === 'bar';
+
+  // For pie/doughnut, let the user choose whether labels/tooltips show raw counts or percentages
+  const valueLabel = (val) => {
+    if(isBar || chartValueMode === 'count') return String(val);
+    return total ? Math.round((val/total)*100) + '%' : '0%';
+  };
 
   dashboardCharts.main = new Chart(ctx, {
     type: currentChartType,
@@ -1294,34 +1439,367 @@ function renderMainChart(counts) {
       datasets: [{
         label: 'Clients',
         data: data,
-        backgroundColor: currentChartType === 'bar' ? 'rgba(233, 180, 76, 0.7)' : colors,
-        borderColor: currentChartType === 'bar' ? 'rgba(233, 180, 76, 1)' : 'rgba(22, 25, 32, 1)',
+        backgroundColor: isBar ? 'rgba(233, 180, 76, 0.7)' : colors,
+        borderColor: isBar ? 'rgba(233, 180, 76, 1)' : 'rgba(22, 25, 32, 1)',
         borderWidth: 1
       }]
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      plugins: { 
-        legend: { 
-          display: currentChartType !== 'bar',
-          position: 'bottom',
-          labels: { color: chartTextColorStrong(), boxWidth: 12, font: { size: 11 } }
-        } 
+      onClick: (evt, elements) => {
+        if(!elements || !elements.length) return;
+        const idx = elements[0].index;
+        const appType = labels[idx];
+        selectedChartAppType = (selectedChartAppType === appType) ? null : appType;
+        showClientsForAppType(selectedChartAppType);
       },
-      scales: currentChartType === 'bar' ? {
-        y: { 
-          beginAtZero: true, 
-          ticks: { color: chartTextColor(), stepSize: 1, precision: 0 }, 
-          grid: { color: chartGridColor() } 
+      onHover: (evt, elements) => {
+        evt.native.target.style.cursor = elements.length ? 'pointer' : 'default';
+      },
+      plugins: {
+        legend: {
+          display: !isBar,
+          position: 'bottom',
+          labels: {
+            color: chartTextColorStrong(), boxWidth: 12, font: { size: 11 },
+            generateLabels: (chart) => {
+              const base = Chart.overrides[chart.config.type].plugins.legend.labels.generateLabels(chart);
+              base.forEach((item, i) => { item.text = `${labels[i]}: ${valueLabel(data[i])}`; });
+              return base;
+            }
+          }
         },
-        x: { 
-          ticks: { color: chartTextColor() }, 
-          grid: { display: false } 
+        tooltip: {
+          callbacks: {
+            label: (ctx) => `${ctx.label}: ${valueLabel(ctx.parsed.y !== undefined ? ctx.parsed.y : ctx.parsed)}`
+          }
+        }
+      },
+      scales: isBar ? {
+        y: {
+          beginAtZero: true,
+          ticks: { color: chartTextColor(), stepSize: 1, precision: 0 },
+          grid: { color: chartGridColor() },
+          title: { display: true, text: 'Number of Clients', color: chartTextColorStrong(), font: { size: 12, weight: '600' } }
+        },
+        x: {
+          ticks: { color: chartTextColor() },
+          grid: { display: false },
+          title: { display: true, text: 'Application Type', color: chartTextColorStrong(), font: { size: 12, weight: '600' } }
         }
       } : {}
     }
   });
+}
+
+/* ---------------- CHART CLIENT LIST (click a bar/slice to see who has it) ---------------- */
+function showClientsForAppType(appType){
+  const listEl = document.getElementById('mainChartClientList');
+  if(!listEl) return;
+  if(!appType){ listEl.innerHTML = ''; return; }
+  const matching = clients.filter(c => (c.applicationTypes||[]).includes(appType));
+  listEl.innerHTML = `
+    <div class="chart-client-list-head">
+      <span>Clients with <strong>${escapeHtml(appType)}</strong> (${matching.length})</span>
+      <button class="icon-btn" id="clearChartClientListBtn">✕ Clear</button>
+    </div>
+    <div class="chart-client-list-body">
+      ${matching.length ? matching.map(c => `<div class="chart-client-chip" data-client-id="${c.id}">${escapeHtml(c.name || 'Untitled client')}</div>`).join('') : '<div class="contacts-empty">No clients have this application.</div>'}
+    </div>`;
+  const clearBtn = document.getElementById('clearChartClientListBtn');
+  if(clearBtn) clearBtn.addEventListener('click', () => { selectedChartAppType = null; listEl.innerHTML = ''; });
+  listEl.querySelectorAll('.chart-client-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      selectedClientId = chip.getAttribute('data-client-id');
+      renderSidebar();
+      renderMain();
+    });
+  });
+}
+
+/* ---------------- CHART DOWNLOAD (export canvas as PNG) ---------------- */
+function downloadChartImage(chartKey, filenameBase){
+  const chart = dashboardCharts[chartKey];
+  if(!chart){ showToast('Switch to 2D view to download this chart.'); return; }
+  const bg = currentTheme === 'light' ? '#FFFFFF' : '#161920';
+  const src = chart.canvas;
+  const tmp = document.createElement('canvas');
+  tmp.width = src.width; tmp.height = src.height;
+  const tctx = tmp.getContext('2d');
+  tctx.fillStyle = bg;
+  tctx.fillRect(0, 0, tmp.width, tmp.height);
+  tctx.drawImage(src, 0, 0);
+  const link = document.createElement('a');
+  link.download = `${filenameBase}-${new Date().toISOString().slice(0,10)}.png`;
+  link.href = tmp.toDataURL('image/png');
+  link.click();
+}
+
+/* ---------------- 3D CHART ENGINE (three.js) ---------------- */
+// Renders a soothing, interactive WebGL scene into `container` for either a grouped
+// bar chart or a pie/doughnut chart. Returns { dispose() } so callers can tear it down
+// cleanly when switching chart type, filters, or back to 2D.
+function makeLabelSprite(text, opts){
+  opts = opts || {};
+  const fontSize = opts.fontSize || 46;
+  const color = opts.color || 'rgba(231,233,238,0.92)';
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  ctx.font = `600 ${fontSize}px 'JetBrains Mono', monospace`;
+  const paddingX = 24;
+  const textWidth = Math.max(ctx.measureText(text).width, 10);
+  canvas.width = textWidth + paddingX * 2;
+  canvas.height = fontSize * 1.6;
+  ctx.font = `600 ${fontSize}px 'JetBrains Mono', monospace`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = color;
+  ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.minFilter = THREE.LinearFilter;
+  const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthWrite: false });
+  const sprite = new THREE.Sprite(material);
+  const scale = (opts.worldHeight || 0.5);
+  sprite.scale.set(scale * (canvas.width / canvas.height), scale, 1);
+  return sprite;
+}
+
+function create3DChart(container, cfg){
+  const { type, labels, data, colors } = cfg;
+  const maxVal = Math.max(1, ...data);
+  const width = container.clientWidth || 400;
+  const height = container.clientHeight || 320;
+  const isLight = currentTheme === 'light';
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(42, width / height, 0.1, 100);
+
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.setSize(width, height);
+  container.appendChild(renderer.domElement);
+
+  // Soft, soothing lighting: hemisphere for smooth gradient shading + two accent point lights
+  const hemi = new THREE.HemisphereLight(isLight ? 0xffffff : 0x8fb6e8, isLight ? 0xd8dbe4 : 0x14161c, 1.0);
+  scene.add(hemi);
+  const dir = new THREE.DirectionalLight(0xffffff, 0.55);
+  dir.position.set(3, 6, 4);
+  scene.add(dir);
+  const warmLight = new THREE.PointLight(0xE9B44C, 0.9, 20);
+  warmLight.position.set(-3, 3, 3);
+  scene.add(warmLight);
+  const coolLight = new THREE.PointLight(0x5FA8D3, 0.7, 20);
+  coolLight.position.set(3, 2, -3);
+  scene.add(coolLight);
+  scene.add(new THREE.AmbientLight(0xffffff, isLight ? 0.55 : 0.28));
+
+  const group = new THREE.Group();
+  scene.add(group);
+
+  const finalScales = []; // per-mesh target scale for entrance animation
+
+  if(type === 'bar'){
+    const n = labels.length;
+    const spacing = 1.15;
+    const barSize = 0.62;
+    const totalWidth = (n - 1) * spacing;
+
+    // floating platform
+    const platform = new THREE.Mesh(
+      new THREE.CylinderGeometry(totalWidth / 2 + 1.1, totalWidth / 2 + 1.3, 0.08, 48),
+      new THREE.MeshStandardMaterial({ color: isLight ? 0xe7e9ee : 0x1d212b, metalness: 0.2, roughness: 0.7, transparent: true, opacity: 0.65 })
+    );
+    platform.position.y = -0.05;
+    group.add(platform);
+
+    labels.forEach((label, i) => {
+      const val = data[i];
+      const h = Math.max(0.08, (val / maxVal) * 2.6);
+      const x = -totalWidth / 2 + i * spacing;
+      const color = new THREE.Color(colors[i % colors.length]);
+
+      const geo = new THREE.BoxGeometry(barSize, h, barSize);
+      const mat = new THREE.MeshStandardMaterial({ color, metalness: 0.25, roughness: 0.35, emissive: color, emissiveIntensity: 0.12 });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.position.set(x, h / 2, 0);
+      mesh.scale.y = 0.001;
+      group.add(mesh);
+      finalScales.push({ mesh, targetY: 1, baseHeight: h });
+
+      const valueLabel = makeLabelSprite(String(val), { worldHeight: 0.34, color: isLight ? 'rgba(27,30,36,0.85)' : 'rgba(231,233,238,0.92)' });
+      valueLabel.position.set(x, h + 0.35, 0);
+      group.add(valueLabel);
+
+      const nameLabel = makeLabelSprite(label, { worldHeight: 0.26, fontSize: 34, color: isLight ? 'rgba(27,30,36,0.6)' : 'rgba(136,144,160,0.9)' });
+      nameLabel.position.set(x, -0.35, 0);
+      group.add(nameLabel);
+    });
+
+    camera.position.set(0, 2.6, totalWidth + 4.2);
+  } else {
+    // pie / doughnut
+    const total = data.reduce((s, v) => s + v, 0) || 1;
+    const outerR = 2.1;
+    const innerR = type === 'doughnut' ? outerR * 0.5 : 0;
+    const depth = 0.55;
+    let angle = -Math.PI / 2;
+
+    labels.forEach((label, i) => {
+      const val = data[i];
+      if(val <= 0) return;
+      const sliceAngle = (val / total) * Math.PI * 2;
+      const start = angle;
+      const end = angle + sliceAngle;
+      angle = end;
+
+      const shape = new THREE.Shape();
+      if(innerR > 0){
+        shape.absarc(0, 0, outerR, start, end, false);
+        const pts = shape.getPoints(24);
+        shape.moveTo(Math.cos(end) * innerR, Math.sin(end) * innerR);
+        shape.absarc(0, 0, innerR, end, start, true);
+        shape.lineTo(Math.cos(start) * outerR, Math.sin(start) * outerR);
+      } else {
+        shape.moveTo(0, 0);
+        shape.absarc(0, 0, outerR, start, end, false);
+        shape.lineTo(0, 0);
+      }
+
+      const geo = new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: true, bevelThickness: 0.025, bevelSize: 0.025, bevelSegments: 2, curveSegments: 32 });
+      const color = new THREE.Color(colors[i % colors.length]);
+      const mat = new THREE.MeshStandardMaterial({ color, metalness: 0.3, roughness: 0.32, emissive: color, emissiveIntensity: 0.1 });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.rotation.x = -Math.PI / 2;
+
+      const mid = (start + end) / 2;
+      const explode = 0.1;
+      mesh.position.set(Math.cos(mid) * explode, 0, -Math.sin(mid) * explode);
+      mesh.scale.set(0.001, 0.001, 0.001);
+      group.add(mesh);
+      finalScales.push({ mesh, targetScale: 1 });
+
+      const pct = Math.round((val / total) * 100);
+      const labelR = outerR + 0.55;
+      const lbl = makeLabelSprite(`${label} · ${pct}%`, { worldHeight: 0.28, fontSize: 32, color: isLight ? 'rgba(27,30,36,0.8)' : 'rgba(231,233,238,0.9)' });
+      lbl.position.set(Math.cos(mid) * labelR, depth / 2, -Math.sin(mid) * labelR);
+      group.add(lbl);
+    });
+
+    group.rotation.x = -0.15; // slight tilt for a pleasant 3/4 view
+    camera.position.set(0, 3.4, 4.6);
+  }
+
+  camera.lookAt(0, type === 'bar' ? 0.6 : 0, 0);
+
+  // ---- interaction: drag to rotate, gentle momentum, resumes slow auto-rotate ----
+  let isDragging = false, prevX = 0, prevY = 0, velY = 0;
+  const AUTO_SPEED = 0.0022;
+  const dom = renderer.domElement;
+  function onDown(e){
+    isDragging = true; velY = 0;
+    const p = e.touches ? e.touches[0] : e;
+    prevX = p.clientX; prevY = p.clientY;
+  }
+  function onMove(e){
+    if(!isDragging) return;
+    const p = e.touches ? e.touches[0] : e;
+    const dx = p.clientX - prevX;
+    const dy = p.clientY - prevY;
+    velY = dx * 0.006;
+    group.rotation.y += velY;
+    group.rotation.x = Math.max(-0.6, Math.min(0.6, group.rotation.x + dy * 0.004));
+    prevX = p.clientX; prevY = p.clientY;
+  }
+  function onUp(){ isDragging = false; }
+  dom.addEventListener('pointerdown', onDown);
+  window.addEventListener('pointermove', onMove);
+  window.addEventListener('pointerup', onUp);
+  dom.addEventListener('touchstart', onDown, { passive: true });
+  dom.addEventListener('touchmove', onMove, { passive: true });
+  dom.addEventListener('touchend', onUp);
+
+  // ---- resize handling ----
+  let resizeObserver = null;
+  function handleResize(){
+    const w = container.clientWidth || width;
+    const h = container.clientHeight || height;
+    if(w === 0 || h === 0) return;
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+    renderer.setSize(w, h);
+  }
+  if(window.ResizeObserver){
+    resizeObserver = new ResizeObserver(handleResize);
+    resizeObserver.observe(container);
+  } else {
+    window.addEventListener('resize', handleResize);
+  }
+
+  // ---- animation loop ----
+  let raf = null;
+  let t = 0;
+  let disposed = false;
+  function animate(){
+    if(disposed) return;
+    raf = requestAnimationFrame(animate);
+    t += 0.016;
+
+    // entrance animation
+    let stillAnimating = false;
+    finalScales.forEach(item => {
+      if(item.targetY !== undefined){
+        if(item.mesh.scale.y < 0.999){ item.mesh.scale.y += (item.targetY - item.mesh.scale.y) * 0.12 + 0.01; stillAnimating = true; }
+      } else if(item.targetScale !== undefined){
+        if(item.mesh.scale.x < 0.999){
+          const s = item.mesh.scale.x + (item.targetScale - item.mesh.scale.x) * 0.14 + 0.01;
+          item.mesh.scale.set(Math.min(s,1), Math.min(s,1), Math.min(s,1));
+          stillAnimating = true;
+        }
+      }
+    });
+
+    if(!isDragging){
+      if(Math.abs(velY) > 0.0001){
+        group.rotation.y += velY;
+        velY *= 0.94;
+      } else {
+        group.rotation.y += AUTO_SPEED;
+      }
+    }
+
+    // gentle soothing "breathing" bob
+    group.position.y = Math.sin(t * 0.6) * 0.04;
+    warmLight.intensity = 0.9 + Math.sin(t * 0.5) * 0.15;
+    coolLight.intensity = 0.7 + Math.cos(t * 0.45) * 0.12;
+
+    renderer.render(scene, camera);
+  }
+  animate();
+
+  function dispose(){
+    disposed = true;
+    if(raf) cancelAnimationFrame(raf);
+    if(resizeObserver) resizeObserver.disconnect();
+    else window.removeEventListener('resize', handleResize);
+    dom.removeEventListener('pointerdown', onDown);
+    window.removeEventListener('pointermove', onMove);
+    window.removeEventListener('pointerup', onUp);
+    dom.removeEventListener('touchstart', onDown);
+    dom.removeEventListener('touchmove', onMove);
+    dom.removeEventListener('touchend', onUp);
+    scene.traverse(obj => {
+      if(obj.geometry) obj.geometry.dispose();
+      if(obj.material){
+        if(obj.material.map) obj.material.map.dispose();
+        obj.material.dispose();
+      }
+    });
+    renderer.dispose();
+    if(dom.parentNode) dom.parentNode.removeChild(dom);
+  }
+
+  return { dispose };
 }
 
 
